@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Node
+node_modules/
+.next/
+out/
+.pnpm-store/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data (keep sample, ignore large files)
+data/parquet/*.parquet
+!data/sample/
+
+# Docker
+*.log
+
+# Coverage
+htmlcov/
+.coverage
+coverage.xml
+
+# Project reference docs (local only)
+REWIND.md
+CLAUDE.md
