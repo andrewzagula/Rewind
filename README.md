@@ -2,16 +2,16 @@
 
 AI-native quant research & backtesting platform.
 
-Design, test, analyze, and refine trading strategies — with an AI assistant in the loop.
+Design, test, analyze, and refine trading strategies with an AI assistant in the loop.
 
 ## What is Rewind?
 
 Rewind combines fast backtesting with an integrated LLM assistant that helps you generate, debug, and improve trading strategies through natural conversation.
 
-- **Write strategies in Python** — simple `Strategy` base class with `init()` and `next()`
-- **Run backtests** — vectorized engine powered by NumPy, with DuckDB + Parquet for data
-- **Visualize results** — equity curves, drawdowns, trade logs, and run comparisons
-- **Chat with AI** — ask it to generate strategies, explain results, debug performance, or run backtests from natural language
+- **Write strategies in Python**: simple `Strategy` base class with `init()` and `next()`
+- **Run backtests**: vectorized engine powered by NumPy, with DuckDB + Parquet for data
+- **Visualize results**: equity curves, drawdowns, trade logs, and run comparisons
+- **Chat with AI**: ask it to generate strategies, explain results, debug performance, or run backtests from natural language
 
 ## Quick Start
 
@@ -86,8 +86,8 @@ Frontend (Next.js)  →  Backend API (FastAPI)  →  Backtest Worker (Python)
 |---|---|---|
 | Frontend | Next.js, TypeScript, Tailwind, Plotly | 3000 |
 | Backend | FastAPI, Pydantic, SQLAlchemy | 8000 |
-| Engine | NumPy, Polars, DuckDB | — |
-| LLM | OpenAI API | — |
+| Engine | NumPy, Polars, DuckDB | N/A |
+| LLM | OpenAI API | N/A |
 | Database | PostgreSQL 16 | 5432 |
 | Cache/Queue | Redis 7 | 6379 |
 
@@ -168,11 +168,11 @@ Key endpoints:
 
 The chat assistant can:
 
-- **Generate strategies** — "Create a mean reversion strategy using Bollinger Bands"
-- **Explain results** — "Why did this strategy lose money in Q1 2024?"
-- **Debug** — "Why is the Sharpe ratio so low?"
-- **Compare runs** — "Compare run A vs run B"
-- **Run backtests** — "Test RSI < 30 on AAPL daily data"
+- **Generate strategies**: "Create a mean reversion strategy using Bollinger Bands"
+- **Explain results**: "Why did this strategy lose money in Q1 2024?"
+- **Debug**: "Why is the Sharpe ratio so low?"
+- **Compare runs**: "Compare run A vs run B"
+- **Run backtests**: "Test RSI < 30 on AAPL daily data"
 
 ## Roadmap
 
