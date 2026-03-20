@@ -13,8 +13,11 @@ export interface Run {
   strategy_id: string;
   params: Record<string, unknown>;
   metrics: RunMetrics;
+  artifacts: Record<string, unknown>;
   status: "pending" | "running" | "completed" | "failed";
   error?: string;
+  started_at?: string;
+  completed_at?: string;
   created_at: string;
 }
 

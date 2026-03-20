@@ -84,7 +84,7 @@ Frontend (Next.js)  →  Backend API (FastAPI)  →  Backtest Worker (Python)
 
 | Service | Tech | Port |
 |---|---|---|
-| Frontend | Next.js, TypeScript, Tailwind, Plotly | 3000 |
+| Frontend | Next.js 16, TypeScript, Tailwind 4, Recharts | 3000 |
 | Backend | FastAPI, Pydantic, SQLAlchemy | 8000 |
 | Engine | NumPy, Polars, DuckDB | N/A |
 | LLM | OpenAI API | N/A |
@@ -157,11 +157,15 @@ Key endpoints:
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/api/v1/run` | Submit a backtest |
+| `POST` | `/api/v1/strategies` | Create strategy |
+| `GET` | `/api/v1/strategies` | List strategies |
+| `GET` | `/api/v1/strategies/{id}` | Get strategy |
+| `PATCH` | `/api/v1/strategies/{id}` | Update strategy |
+| `DELETE` | `/api/v1/strategies/{id}` | Delete strategy |
+| `POST` | `/api/v1/runs` | Submit a backtest |
 | `GET` | `/api/v1/runs` | List runs |
 | `GET` | `/api/v1/runs/{id}` | Get run results |
-| `POST` | `/api/v1/strategies` | Create strategy |
-| `POST` | `/api/v1/chat` | Send chat message (streaming) |
+| `GET` | `/api/v1/runs/{id}/trades` | Get run trades |
 | `GET` | `/health` | Health check |
 
 ## Chat Assistant
@@ -177,10 +181,11 @@ The chat assistant can:
 ## Roadmap
 
 - [x] Project scaffolding
-- [ ] Backtest engine with sample data
-- [ ] Core API endpoints
-- [ ] Visualization dashboard
-- [ ] Experiment tracking & run comparison
+- [x] Backtest engine with sample data
+- [x] Core API endpoints (strategies CRUD, runs, trades)
+- [x] Async worker (Arq + Redis)
+- [x] Frontend UI (strategy editor, run trigger, metrics, equity curve)
+- [ ] Visualization dashboard & run comparison
 - [ ] LLM chat integration
 - [ ] Strategy sandboxing
 - [ ] Production hardening
