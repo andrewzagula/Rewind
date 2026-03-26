@@ -1,10 +1,3 @@
-"""Initial schema — all tables for Phase 1
-
-Revision ID: 001
-Revises: None
-Create Date: 2026-03-20
-
-"""
 from typing import Sequence, Union
 
 from alembic import op

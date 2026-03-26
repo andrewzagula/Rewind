@@ -1,5 +1,3 @@
-"""Signal dataclass — output of Strategy.next()."""
-
 from dataclasses import dataclass, field
 from typing import Literal
 

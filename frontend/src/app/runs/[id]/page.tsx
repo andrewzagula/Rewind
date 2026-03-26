@@ -45,52 +45,86 @@ export default function RunDetailPage({
   const { id } = use(params);
   const [run, setRun] = useState<Run | null>(null);
   const [trades, setTrades] = useState<Trade[]>([]);
+  const [error, setError] = useState("");
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    fetchRun();
+    async function loadTrades() {
+      try {
+        const res = await apiFetch<{ items: Trade[]; total: number }>(`/api/v1/runs/${id}/trades`);
+        setTrades(res.items);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load trades");
+      }
+    }
+
+    async function pollRun() {
+      try {
+        const updated = await apiFetch<Run>(`/api/v1/runs/${id}`);
+        setRun(updated);
+
+        if (updated.status === "completed" || updated.status === "failed") {
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+          }
+          intervalRef.current = null;
+
+          if (updated.status === "completed") {
+            await loadTrades();
+          }
+        }
+      } catch (err) {
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+        }
+        intervalRef.current = null;
+        setError(err instanceof Error ? err.message : "Failed to refresh run");
+      }
+    }
+
+    async function fetchRun() {
+      setError("");
+
+      try {
+        const r = await apiFetch<Run>(`/api/v1/runs/${id}`);
+        setRun(r);
+
+        if (r.status === "pending" || r.status === "running") {
+          if (!intervalRef.current) {
+            intervalRef.current = setInterval(() => {
+              void pollRun();
+            }, 3000);
+          }
+        } else if (r.status === "completed") {
+          await loadTrades();
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load run");
+      }
+    }
+
+    void fetchRun();
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+      intervalRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  function fetchRun() {
-    apiFetch<Run>(`/api/v1/runs/${id}`).then((r) => {
-      setRun(r);
-      if (r.status === "pending" || r.status === "running") {
-        if (!intervalRef.current) {
-          intervalRef.current = setInterval(() => {
-            apiFetch<Run>(`/api/v1/runs/${id}`).then((updated) => {
-              setRun(updated);
-              if (updated.status === "completed" || updated.status === "failed") {
-                if (intervalRef.current) clearInterval(intervalRef.current);
-                intervalRef.current = null;
-                if (updated.status === "completed") loadTrades();
-              }
-            });
-          }, 3000);
-        }
-      } else if (r.status === "completed") {
-        loadTrades();
-      }
-    });
-  }
-
-  function loadTrades() {
-    apiFetch<{ items: Trade[]; total: number }>(`/api/v1/runs/${id}/trades`).then(
-      (res) => setTrades(res.items)
+  if (!run) {
+    return (
+      <div className="px-6 py-10">
+        <p className={error ? "text-red-400" : "text-zinc-400"}>{error || "Loading..."}</p>
+      </div>
     );
   }
-
-  if (!run) return <p className="px-6 py-10 text-zinc-400">Loading...</p>;
 
   const equityCurve = (run.artifacts?.equity_curve as number[]) ?? [];
   const chartData = equityCurve.map((value, i) => ({ day: i + 1, value }));
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-10">
-      {/* Header */}
       <div className="flex items-center gap-4">
         <h1 className="text-2xl font-bold">Run Detail</h1>
         <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusColors[run.status] ?? ""}`}>
@@ -112,7 +146,12 @@ export default function RunDetailPage({
         </div>
       )}
 
-      {/* Metrics */}
+      {error && (
+        <div className="mt-4 rounded border border-red-800 bg-red-950 p-3 text-sm text-red-300">
+          {error}
+        </div>
+      )}
+
       {run.status === "completed" && run.metrics && (
         <div className="mt-8">
           <h2 className="text-lg font-semibold">Metrics</h2>
@@ -132,7 +171,6 @@ export default function RunDetailPage({
         </div>
       )}
 
-      {/* Equity Curve */}
       {run.status === "completed" && chartData.length > 0 && (
         <div className="mt-8">
           <h2 className="text-lg font-semibold">Equity Curve</h2>
@@ -174,7 +212,6 @@ export default function RunDetailPage({
         </div>
       )}
 
-      {/* Trades */}
       {run.status === "completed" && trades.length > 0 && (
         <div className="mt-8">
           <h2 className="text-lg font-semibold">Trades ({trades.length})</h2>

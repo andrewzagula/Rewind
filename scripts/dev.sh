@@ -3,11 +3,9 @@ set -euo pipefail
 
 echo "Starting Rewind development environment..."
 
-# Check for .env
 if [ ! -f .env ]; then
     echo "No .env file found. Copying from .env.example..."
     cp .env.example .env
 fi
 
-# Start services
 docker compose up --build "$@"

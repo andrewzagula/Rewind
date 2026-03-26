@@ -1,5 +1,3 @@
-"""OpenAI API wrapper with streaming support."""
-
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
@@ -17,7 +15,6 @@ class LLMClient:
         messages: list[dict[str, str]],
         stream: bool = True,
     ) -> AsyncGenerator[str]:
-        """Send messages and yield response chunks."""
         response = await self.client.chat.completions.create(
             model=self.model,
             messages=messages,

@@ -1,5 +1,3 @@
-"""Alembic async environment configuration."""
-
 import asyncio
 from logging.config import fileConfig
 
@@ -7,17 +5,16 @@ from alembic import context
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.core.config import settings
-from app.models import Base  # noqa: F401 — registers all models
+from app import models
 
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-target_metadata = Base.metadata
+target_metadata = models.Base.metadata
 
 
 def run_migrations_offline() -> None:
-    """Run migrations in 'offline' mode — emit SQL to script output."""
     url = settings.database_url
     context.configure(
         url=url,
@@ -29,14 +26,13 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
-def do_run_migrations(connection) -> None:  # type: ignore[no-untyped-def]
+def do_run_migrations(connection: object) -> None:
     context.configure(connection=connection, target_metadata=target_metadata)
     with context.begin_transaction():
         context.run_migrations()
 
 
 async def run_migrations_online() -> None:
-    """Run migrations in 'online' mode — connect to DB via async engine."""
     connectable = create_async_engine(settings.database_url, echo=False)
 
     async with connectable.connect() as connection:

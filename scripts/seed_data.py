@@ -1,5 +1,3 @@
-"""Generate sample OHLCV data for development and testing."""
-
 from pathlib import Path
 
 import numpy as np
@@ -14,7 +12,6 @@ def generate_ohlcv(
     end: str = "2024-12-31",
     initial_price: float = 100.0,
 ) -> pd.DataFrame:
-    """Generate synthetic daily OHLCV data with random walk prices."""
     dates = pd.bdate_range(start=start, end=end)
     n = len(dates)
 

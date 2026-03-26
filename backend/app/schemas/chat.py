@@ -1,4 +1,5 @@
 import uuid
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -10,5 +11,5 @@ class ChatRequest(BaseModel):
 
 
 class ChatChunk(BaseModel):
-    type: str  # "text" | "code" | "action"
+    type: Literal["text", "code", "action"]
     content: str

@@ -1,5 +1,3 @@
-"""Run submission and results endpoints."""
-
 import uuid
 
 from arq.connections import ArqRedis, create_pool, RedisSettings

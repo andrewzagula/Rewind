@@ -1,5 +1,3 @@
-"""Compute performance metrics from an equity curve and trade list."""
-
 from __future__ import annotations
 
 import numpy as np
@@ -11,7 +9,6 @@ def compute_metrics(
     risk_free_rate: float = 0.0,
     periods_per_year: int = 252,
 ) -> dict[str, float]:
-    """Compute standard backtest performance metrics."""
     equity = np.array(equity_curve, dtype=np.float64)
     returns = np.diff(equity) / equity[:-1]
 
@@ -27,14 +24,12 @@ def compute_metrics(
     downside_vol = float(np.std(downside) * np.sqrt(periods_per_year)) if len(downside) > 0 else 0.0
     sortino = (annualized_return - risk_free_rate) / downside_vol if downside_vol > 0 else 0.0
 
-    # Max drawdown
     peak = np.maximum.accumulate(equity)
     drawdown = (equity - peak) / peak
     max_drawdown = float(np.min(drawdown)) if len(drawdown) > 0 else 0.0
 
     calmar = annualized_return / abs(max_drawdown) if max_drawdown != 0 else 0.0
 
-    # Trade stats
     pnl = np.array(trades_pnl, dtype=np.float64) if trades_pnl else np.array([])
     wins = pnl[pnl > 0]
     losses = pnl[pnl < 0]

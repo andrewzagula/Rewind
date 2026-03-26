@@ -1,5 +1,3 @@
-"""Arq worker entry point. Run with: arq backend.worker.WorkerSettings"""
-
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -19,7 +17,6 @@ DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "sample"
 
 
 async def run_backtest(ctx: dict, run_id: str) -> dict:
-    """Execute a backtest run. Picked up from Redis queue."""
     from engine.data_loader import load_bars
     from engine.executor import run_backtest as execute
     from engine.strategy_runner import load_strategy_class
@@ -53,7 +50,6 @@ async def run_backtest(ctx: dict, run_id: str) -> dict:
                 initial_cash=run.params.get("initial_cash", 100_000.0),
             )
 
-            # Store trades
             for t in result.trades:
                 trade = Trade(
                     run_id=run.id,

@@ -19,6 +19,6 @@ def test_run_backtest_basic():
     ]
     result = run_backtest(AlwaysBuy(), data)
     assert len(result.equity_curve) == 3
-    assert len(result.trades) == 1  # buys once, then holds
+    assert len(result.trades) == 1
     assert result.trades[0]["side"] == "buy"
-    assert result.metrics  # non-empty
+    assert result.metrics

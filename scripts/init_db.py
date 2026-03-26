@@ -1,5 +1,3 @@
-"""Initialize the PostgreSQL database schema."""
-
 import asyncio
 
 from app.core.database import engine

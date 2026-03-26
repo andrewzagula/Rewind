@@ -1,5 +1,3 @@
-"""Strategy CRUD operations."""
-
 import uuid
 
 from sqlalchemy import select, func

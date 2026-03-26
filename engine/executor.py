@@ -1,5 +1,3 @@
-"""Core backtest executor — runs a Strategy against historical data."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -23,18 +21,6 @@ def run_backtest(
     params: dict[str, Any] | None = None,
     initial_cash: float = 100_000.0,
 ) -> BacktestResult:
-    """Execute a strategy over historical bar data.
-
-    Args:
-        strategy: An instance of a Strategy subclass.
-        data: List of bar dicts, each containing at minimum
-              {"symbol", "close", "timestamp"} plus any indicator columns.
-        params: Strategy parameters passed to strategy.init().
-        initial_cash: Starting portfolio cash.
-
-    Returns:
-        BacktestResult with equity curve, trades, and computed metrics.
-    """
     portfolio = Portfolio(cash=initial_cash)
     strategy.init(params or {})
 

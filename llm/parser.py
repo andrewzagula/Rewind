@@ -1,19 +1,17 @@
-"""Parse LLM responses into structured output types."""
-
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import Literal
 
 
 @dataclass
 class ParsedResponse:
-    type: str  # "text" | "code" | "action"
+    type: Literal["text", "code", "action"]
     content: str
 
 
 def parse_response(text: str) -> list[ParsedResponse]:
-    """Split LLM response into typed segments (text and code blocks)."""
     segments: list[ParsedResponse] = []
     parts = re.split(r"(```[\s\S]*?```)", text)
 

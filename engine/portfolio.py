@@ -1,5 +1,3 @@
-"""Portfolio state management during a backtest."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -27,16 +25,15 @@ class Portfolio:
         return self.positions[symbol]
 
     def update_position(self, symbol: str, quantity: float, price: float) -> float:
-        """Update position and return realized PnL (0 for new entries)."""
         pos = self.get_position(symbol)
         pnl = 0.0
 
-        if quantity > 0:  # buying
+        if quantity > 0:
             total_cost = pos.avg_price * pos.quantity + price * quantity
             pos.quantity += quantity
             pos.avg_price = total_cost / pos.quantity if pos.quantity else 0
             self.cash -= price * quantity
-        else:  # selling
+        else:
             sell_qty = abs(quantity)
             pnl = (price - pos.avg_price) * sell_qty
             pos.quantity -= sell_qty
@@ -47,7 +44,6 @@ class Portfolio:
         return pnl
 
     def equity(self, prices: dict[str, float]) -> float:
-        """Total portfolio value at given market prices."""
         position_value = sum(
             p.quantity * prices.get(p.symbol, 0.0) for p in self.positions.values()
         )

@@ -1,10 +1,24 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+function getApiError(error: unknown): Error {
+  if (error instanceof TypeError && error.message === "Failed to fetch") {
+    return new Error(
+      "Unable to reach the API. Start the backend or check the frontend API proxy configuration."
+    );
+  }
+
+  return error instanceof Error ? error : new Error("Unexpected API error");
+}
 
 export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    ...options,
-  });
+  let res: Response;
+
+  try {
+    res = await fetch(path, {
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      ...options,
+    });
+  } catch (error) {
+    throw getApiError(error);
+  }
 
   if (!res.ok) {
     throw new Error(`API error: ${res.status} ${res.statusText}`);
@@ -15,11 +29,17 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
 }
 
 export async function* apiStream(path: string, body: unknown): AsyncGenerator<string> {
-  const res = await fetch(`${API_URL}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  let res: Response;
+
+  try {
+    res = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch (error) {
+    throw getApiError(error);
+  }
 
   if (!res.ok || !res.body) {
     throw new Error(`API error: ${res.status}`);

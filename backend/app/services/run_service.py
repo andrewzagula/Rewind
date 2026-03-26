@@ -1,5 +1,3 @@
-"""Run orchestration — create, list, get, and get trades."""
-
 import uuid
 
 from sqlalchemy import select, func

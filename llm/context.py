@@ -1,5 +1,3 @@
-"""Build context payloads for LLM prompts."""
-
 from __future__ import annotations
 
 import json
@@ -12,7 +10,6 @@ def build_context(
     recent_trades: list[dict[str, Any]] | None = None,
     dataset_info: dict[str, Any] | None = None,
 ) -> str:
-    """Assemble context for injection into LLM system prompt."""
     sections = []
 
     if strategy_code:

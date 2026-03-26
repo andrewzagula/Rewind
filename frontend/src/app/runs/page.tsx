@@ -15,15 +15,24 @@ const statusColors: Record<string, string> = {
 export default function RunsPage() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    loadRuns();
+    void loadRuns();
   }, []);
 
-  function loadRuns() {
-    apiFetch<{ items: Run[]; total: number }>("/api/v1/runs")
-      .then((res) => setRuns(res.items))
-      .finally(() => setLoading(false));
+  async function loadRuns() {
+    setLoading(true);
+    setError("");
+
+    try {
+      const res = await apiFetch<{ items: Run[]; total: number }>("/api/v1/runs");
+      setRuns(res.items);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load runs");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -38,11 +47,17 @@ export default function RunsPage() {
         </button>
       </div>
 
+      {error && (
+        <p className="mt-4 rounded border border-red-800 bg-red-950 px-3 py-2 text-sm text-red-300">
+          {error}
+        </p>
+      )}
+
       {loading ? (
         <p className="mt-8 text-zinc-400">Loading...</p>
-      ) : runs.length === 0 ? (
+      ) : runs.length === 0 && !error ? (
         <p className="mt-8 text-zinc-400">No runs yet. Run a backtest from a strategy page.</p>
-      ) : (
+      ) : runs.length > 0 ? (
         <table className="mt-8 w-full text-left text-sm">
           <thead className="border-b border-zinc-800 text-zinc-400">
             <tr>
@@ -81,7 +96,7 @@ export default function RunsPage() {
             ))}
           </tbody>
         </table>
-      )}
+      ) : null}
     </div>
   );
 }

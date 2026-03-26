@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useEffectEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import type { Strategy, Run } from "@/lib/types";
@@ -20,13 +20,22 @@ export default function StrategyDetailPage({
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    apiFetch<Strategy>(`/api/v1/strategies/${id}`).then((s) => {
+  const loadStrategy = useEffectEvent(async () => {
+    setError("");
+
+    try {
+      const s = await apiFetch<Strategy>(`/api/v1/strategies/${id}`);
       setStrategy(s);
       setName(s.name);
       setDescription(s.description);
       setCode(s.code);
-    });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load strategy");
+    }
+  });
+
+  useEffect(() => {
+    void loadStrategy();
   }, [id]);
 
   async function handleSave() {
@@ -70,7 +79,13 @@ export default function StrategyDetailPage({
     }
   }
 
-  if (!strategy) return <p className="px-6 py-10 text-zinc-400">Loading...</p>;
+  if (!strategy) {
+    return (
+      <div className="px-6 py-10">
+        <p className={error ? "text-red-400" : "text-zinc-400"}>{error || "Loading..."}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-4xl px-6 py-10">

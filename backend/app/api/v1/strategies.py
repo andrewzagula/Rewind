@@ -1,5 +1,3 @@
-"""Strategy CRUD endpoints."""
-
 import uuid
 
 from fastapi import APIRouter, HTTPException

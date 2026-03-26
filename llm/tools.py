@@ -1,5 +1,3 @@
-"""Tool definitions for LLM function calling."""
-
 TOOLS = [
     {
         "type": "function",

@@ -11,9 +11,7 @@ from app.core.database import engine
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-    # Startup
     yield
-    # Shutdown
     await engine.dispose()
 
 
