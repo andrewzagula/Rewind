@@ -19,6 +19,8 @@ def test_run_backtest_basic():
     ]
     result = run_backtest(AlwaysBuy(), data)
     assert len(result.equity_curve) == 3
+    assert len(result.equity_points) == 3
+    assert result.equity_points[0]["timestamp"] == "2024-01-01"
     assert len(result.trades) == 1
     assert result.trades[0]["side"] == "buy"
     assert result.metrics

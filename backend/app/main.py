@@ -4,7 +4,7 @@ from collections.abc import AsyncGenerator
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1 import runs, strategies, chat, datasets
+from app.api.v1 import chat, compare, datasets, runs, strategies
 from app.core.config import settings
 from app.core.database import engine
 
@@ -34,6 +34,7 @@ app.include_router(runs.router, prefix="/api/v1")
 app.include_router(strategies.router, prefix="/api/v1")
 app.include_router(chat.router, prefix="/api/v1")
 app.include_router(datasets.router, prefix="/api/v1")
+app.include_router(compare.router, prefix="/api/v1")
 
 
 @app.get("/health")

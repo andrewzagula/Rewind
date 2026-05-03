@@ -8,6 +8,11 @@ export interface Strategy {
   updated_at: string;
 }
 
+export interface ListResponse<T> {
+  items: T[];
+  total: number;
+}
+
 export interface Run {
   id: string;
   strategy_id: string;
@@ -35,6 +40,36 @@ export interface RunMetrics {
   avg_trade_pnl: number;
   avg_win: number;
   avg_loss: number;
+}
+
+export interface CompareEquityPoint {
+  index: number;
+  timestamp: string;
+  value: number;
+}
+
+export interface ComparedRun {
+  id: string;
+  strategy_id: string;
+  status: Run["status"];
+  params: Record<string, unknown>;
+  metrics: Partial<RunMetrics> & Record<string, unknown>;
+  error?: string | null;
+  created_at: string;
+  completed_at?: string | null;
+  equity_points: CompareEquityPoint[];
+}
+
+export interface MetricDelta {
+  key: string;
+  base: number | null;
+  values: Array<number | null>;
+  deltas: Array<number | null>;
+}
+
+export interface CompareResponse {
+  runs: ComparedRun[];
+  metric_deltas: MetricDelta[];
 }
 
 export interface Trade {

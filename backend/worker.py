@@ -64,7 +64,10 @@ async def run_backtest(ctx: dict, run_id: str) -> dict:
 
             run.status = "completed"
             run.metrics = result.metrics
-            run.artifacts = {"equity_curve": result.equity_curve}
+            run.artifacts = {
+                "equity_curve": result.equity_curve,
+                "equity_points": result.equity_points,
+            }
             run.completed_at = datetime.now(timezone.utc)
             await db.commit()
 

@@ -8,6 +8,23 @@ function getApiError(error: unknown): Error {
   return error instanceof Error ? error : new Error("Unexpected API error");
 }
 
+async function getResponseError(res: Response): Promise<Error> {
+  let detail = `${res.status} ${res.statusText}`;
+
+  try {
+    const body = (await res.json()) as { detail?: unknown };
+    if (typeof body.detail === "string") {
+      detail = body.detail;
+    } else if (body.detail != null) {
+      detail = JSON.stringify(body.detail);
+    }
+  } catch {
+    // Keep the status text if the response body is empty or not JSON.
+  }
+
+  return new Error(`API error: ${detail}`);
+}
+
 export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   let res: Response;
 
@@ -21,7 +38,7 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
   }
 
   if (!res.ok) {
-    throw new Error(`API error: ${res.status} ${res.statusText}`);
+    throw await getResponseError(res);
   }
 
   if (res.status === 204) return undefined as T;

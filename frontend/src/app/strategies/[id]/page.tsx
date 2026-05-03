@@ -1,9 +1,27 @@
 "use client";
 
-import { use, useEffect, useEffectEvent, useState } from "react";
+import Link from "next/link";
+import { use, useCallback, useEffect, useEffectEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import RunStatusBadge from "@/components/run-status-badge";
 import { apiFetch } from "@/lib/api";
-import type { Strategy, Run } from "@/lib/types";
+import type { ListResponse, Run, Strategy } from "@/lib/types";
+
+function formatDateTime(value?: string): string {
+  return value ? new Date(value).toLocaleString() : "-";
+}
+
+function formatSharpe(run: Run): string {
+  const value = run.metrics?.sharpe_ratio;
+  return typeof value === "number" && Number.isFinite(value) ? value.toFixed(2) : "-";
+}
+
+function formatReturn(run: Run): string {
+  const value = run.metrics?.total_return;
+  return typeof value === "number" && Number.isFinite(value)
+    ? `${(value * 100).toFixed(1)}%`
+    : "-";
+}
 
 export default function StrategyDetailPage({
   params,
@@ -19,6 +37,9 @@ export default function StrategyDetailPage({
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
+  const [runs, setRuns] = useState<Run[]>([]);
+  const [runsLoading, setRunsLoading] = useState(true);
+  const [runsError, setRunsError] = useState("");
 
   const loadStrategy = useEffectEvent(async () => {
     setError("");
@@ -34,9 +55,25 @@ export default function StrategyDetailPage({
     }
   });
 
+  const loadRunHistory = useCallback(async () => {
+    setRunsLoading(true);
+    setRunsError("");
+
+    try {
+      const query = new URLSearchParams({ strategy_id: id, limit: "10" });
+      const res = await apiFetch<ListResponse<Run>>(`/api/v1/runs?${query.toString()}`);
+      setRuns(res.items);
+    } catch (err) {
+      setRunsError(err instanceof Error ? err.message : "Failed to load run history");
+    } finally {
+      setRunsLoading(false);
+    }
+  }, [id]);
+
   useEffect(() => {
     void loadStrategy();
-  }, [id]);
+    void loadRunHistory();
+  }, [id, loadRunHistory]);
 
   async function handleSave() {
     setSaving(true);
@@ -88,7 +125,7 @@ export default function StrategyDetailPage({
   }
 
   return (
-    <div className="mx-auto w-full max-w-4xl px-6 py-10">
+    <div className="mx-auto w-full max-w-5xl px-6 py-10">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">{strategy.name}</h1>
         <span className="text-sm text-zinc-400">v{strategy.version}</span>
@@ -151,6 +188,71 @@ export default function StrategyDetailPage({
           </button>
         </div>
       </div>
+
+      <section className="mt-10">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">Run History</h2>
+            <p className="mt-1 text-sm text-zinc-400">Latest backtests for this strategy.</p>
+          </div>
+          <button
+            onClick={() => void loadRunHistory()}
+            className="rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
+          >
+            Refresh
+          </button>
+        </div>
+
+        {runsError ? (
+          <p className="mt-4 rounded border border-red-800 bg-red-950 px-3 py-2 text-sm text-red-300">
+            {runsError}
+          </p>
+        ) : null}
+
+        {runsLoading ? (
+          <p className="mt-4 rounded border border-zinc-800 bg-zinc-900 p-4 text-sm text-zinc-400">
+            Loading run history...
+          </p>
+        ) : runs.length === 0 && !runsError ? (
+          <div className="mt-4 rounded border border-zinc-800 bg-zinc-900 p-5 text-sm">
+            <p className="font-medium text-zinc-200">No runs for this strategy yet</p>
+            <p className="mt-1 text-zinc-400">Start a backtest to create the first result.</p>
+          </div>
+        ) : runs.length > 0 ? (
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[720px] text-left text-sm">
+              <thead className="border-b border-zinc-800 text-zinc-400">
+                <tr>
+                  <th className="pb-3 font-medium">Run</th>
+                  <th className="pb-3 font-medium">Status</th>
+                  <th className="pb-3 font-medium">Sharpe</th>
+                  <th className="pb-3 font-medium">Return</th>
+                  <th className="pb-3 font-medium">Completed</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800">
+                {runs.map((run) => (
+                  <tr key={run.id} className="hover:bg-zinc-900">
+                    <td className="py-3">
+                      <Link href={`/runs/${run.id}`} className="text-blue-400 hover:underline">
+                        Run {run.id.slice(0, 8)}...
+                      </Link>
+                    </td>
+                    <td className="py-3">
+                      <RunStatusBadge status={run.status} />
+                    </td>
+                    <td className="py-3 text-zinc-300">{formatSharpe(run)}</td>
+                    <td className="py-3 text-zinc-300">{formatReturn(run)}</td>
+                    <td className="py-3 text-zinc-400">
+                      {formatDateTime(run.completed_at ?? run.created_at)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+      </section>
     </div>
   );
 }

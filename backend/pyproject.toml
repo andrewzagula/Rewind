@@ -15,6 +15,10 @@ dependencies = [
     "arq>=0.26",
     "httpx>=0.28",
     "openai>=1.60",
+    "duckdb>=1.1",
+    "numpy>=2.0",
+    "pandas>=2.2",
+    "pyarrow>=18.0",
 ]
 
 [project.optional-dependencies]

@@ -55,9 +55,15 @@ async def get_run_trades(
     db: DbSession,
     limit: int = 100,
     offset: int = 0,
+    sort_by: str = "timestamp",
+    sort_dir: str = "asc",
 ) -> dict:
     run = await run_service.get_run(db, run_id)
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
-    trades, total = await run_service.get_run_trades(db, run_id, limit, offset)
+    if sort_dir not in {"asc", "desc"}:
+        raise HTTPException(status_code=400, detail="sort_dir must be asc or desc")
+    trades, total = await run_service.get_run_trades(
+        db, run_id, limit, offset, sort_by, sort_dir
+    )
     return {"items": [TradeResponse.model_validate(t) for t in trades], "total": total}

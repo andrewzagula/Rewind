@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import select, func
+from sqlalchemy import asc, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.run import Run
@@ -47,13 +47,25 @@ async def get_run_trades(
     run_id: uuid.UUID,
     limit: int = 100,
     offset: int = 0,
+    sort_by: str = "timestamp",
+    sort_dir: str = "asc",
 ) -> tuple[list[Trade], int]:
     count_q = select(func.count()).select_from(Trade).where(Trade.run_id == run_id)
     total = await db.scalar(count_q)
+    sort_columns = {
+        "timestamp": Trade.timestamp,
+        "symbol": Trade.symbol,
+        "side": Trade.side,
+        "quantity": Trade.quantity,
+        "price": Trade.price,
+        "pnl": Trade.pnl,
+    }
+    sort_column = sort_columns.get(sort_by, Trade.timestamp)
+    ordering = desc(sort_column) if sort_dir == "desc" else asc(sort_column)
     result = await db.execute(
         select(Trade)
         .where(Trade.run_id == run_id)
-        .order_by(Trade.timestamp)
+        .order_by(ordering, Trade.id)
         .limit(limit)
         .offset(offset)
     )
