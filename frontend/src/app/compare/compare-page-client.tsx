@@ -65,6 +65,15 @@ function comparePath(runIds: string[]): string {
   return `/compare?${query.toString()}`;
 }
 
+function chatComparePath(runIds: string[]): string {
+  const query = new URLSearchParams({
+    context: "compare",
+    run_ids: runIds.join(","),
+    prompt: "Compare these runs and explain the biggest performance differences.",
+  });
+  return `/chat?${query.toString()}`;
+}
+
 function formatCurrency(value: number | unknown): string {
   return `$${Number(value).toLocaleString(undefined, {
     minimumFractionDigits: 2,
@@ -210,12 +219,22 @@ export default function ComparePageClient() {
             Compare metrics and equity curves against the first selected run.
           </p>
         </div>
-        <Link
-          href="/runs"
-          className="rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
-        >
-          Runs
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          {selectedRunIds.length >= 2 ? (
+            <Link
+              href={chatComparePath(selectedRunIds)}
+              className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500"
+            >
+              Ask Rewind
+            </Link>
+          ) : null}
+          <Link
+            href="/runs"
+            className="rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
+          >
+            Runs
+          </Link>
+        </div>
       </header>
 
       <section className="mt-8">

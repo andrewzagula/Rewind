@@ -4,6 +4,17 @@ import json
 from typing import Any
 
 
+def format_prompt_context(context: dict[str, Any]) -> str:
+    if not context:
+        return "No additional context was provided."
+
+    return (
+        "Use only the trusted Rewind context below. If needed fields are missing, "
+        "state that limitation explicitly instead of inferring values.\n\n"
+        f"```json\n{json.dumps(context, indent=2, sort_keys=True, default=str)}\n```"
+    )
+
+
 def build_context(
     strategy_code: str = "",
     run_metrics: dict[str, Any] | None = None,

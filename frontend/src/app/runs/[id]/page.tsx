@@ -77,6 +77,15 @@ function formatCurrency(value: unknown): string {
   })}`;
 }
 
+function chatRunPath(runId: string, prompt: string): string {
+  const query = new URLSearchParams({
+    context: "run",
+    run_id: runId,
+    prompt,
+  });
+  return `/chat?${query.toString()}`;
+}
+
 function getEquityPoints(run: Run): EquityPoint[] {
   const rawPoints = run.artifacts?.equity_points;
   if (Array.isArray(rawPoints)) {
@@ -253,17 +262,36 @@ export default function RunDetailPage({
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-10">
-      <div className="flex flex-wrap items-center gap-4">
-        <h1 className="text-2xl font-bold">Run Detail</h1>
-        <RunStatusBadge status={run.status} className="px-2.5" />
-      </div>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="flex flex-wrap items-center gap-4">
+            <h1 className="text-2xl font-bold">Run Detail</h1>
+            <RunStatusBadge status={run.status} className="px-2.5" />
+          </div>
 
-      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-zinc-400">
-        <Link href={`/strategies/${run.strategy_id}`} className="text-blue-400 hover:underline">
-          Strategy {run.strategy_id.slice(0, 8)}...
-        </Link>
-        {run.started_at && <span>Started: {new Date(run.started_at).toLocaleString()}</span>}
-        {run.completed_at && <span>Completed: {new Date(run.completed_at).toLocaleString()}</span>}
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-zinc-400">
+            <Link href={`/strategies/${run.strategy_id}`} className="text-blue-400 hover:underline">
+              Strategy {run.strategy_id.slice(0, 8)}...
+            </Link>
+            {run.started_at && <span>Started: {new Date(run.started_at).toLocaleString()}</span>}
+            {run.completed_at && <span>Completed: {new Date(run.completed_at).toLocaleString()}</span>}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href={chatRunPath(run.id, "Analyze this run and explain the most important results.")}
+            className="rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
+          >
+            Ask Rewind
+          </Link>
+          <Link
+            href={chatRunPath(run.id, "Why did this run lose money?")}
+            className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500"
+          >
+            Explain loss
+          </Link>
+        </div>
       </div>
 
       {run.status === "failed" && (
