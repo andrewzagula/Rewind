@@ -15,6 +15,16 @@ async function getResponseError(res: Response): Promise<Error> {
     const body = (await res.json()) as { detail?: unknown };
     if (typeof body.detail === "string") {
       detail = body.detail;
+    } else if (Array.isArray(body.detail)) {
+      detail = body.detail
+        .map((item) => {
+          if (!item || typeof item !== "object") return String(item);
+          const record = item as Record<string, unknown>;
+          const location = Array.isArray(record.loc) ? record.loc.join(".") : "";
+          const message = typeof record.msg === "string" ? record.msg : JSON.stringify(record);
+          return location ? `${location}: ${message}` : message;
+        })
+        .join("; ");
     } else if (body.detail != null) {
       detail = JSON.stringify(body.detail);
     }

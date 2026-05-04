@@ -14,11 +14,13 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { InlineProgress, LoadingPanel, SkeletonBlock } from "@/components/progress";
 import RunStatusBadge from "@/components/run-status-badge";
 import { apiFetch } from "@/lib/api";
 import type { Run, Trade } from "@/lib/types";
 
 const TRADE_PAGE_SIZE = 25;
+const RUN_POLL_INTERVAL_MS = 3000;
 
 const metricLabels: [string, string, (v: number) => string][] = [
   ["total_return", "Total Return", (v) => `${(v * 100).toFixed(2)}%`],
@@ -84,6 +86,14 @@ function chatRunPath(runId: string, prompt: string): string {
     prompt,
   });
   return `/chat?${query.toString()}`;
+}
+
+function isActiveRun(run: Run): boolean {
+  return run.status === "pending" || run.status === "running";
+}
+
+function formatRefreshTime(value: Date | null): string {
+  return value ? value.toLocaleTimeString() : "waiting for first refresh";
 }
 
 function getEquityPoints(run: Run): EquityPoint[] {
@@ -159,6 +169,8 @@ export default function RunDetailPage({
   const [tradeSortBy, setTradeSortBy] = useState("timestamp");
   const [tradeSortDir, setTradeSortDir] = useState<"asc" | "desc">("asc");
   const [tradesLoading, setTradesLoading] = useState(false);
+  const [isPolling, setIsPolling] = useState(false);
+  const [lastRunRefreshAt, setLastRunRefreshAt] = useState<Date | null>(null);
   const [error, setError] = useState("");
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -191,34 +203,45 @@ export default function RunDetailPage({
       try {
         const updated = await apiFetch<Run>(`/api/v1/runs/${id}`);
         setRun(updated);
+        setLastRunRefreshAt(new Date());
 
         if (updated.status === "completed" || updated.status === "failed") {
           if (intervalRef.current) clearInterval(intervalRef.current);
           intervalRef.current = null;
+          setIsPolling(false);
+        } else {
+          setIsPolling(true);
         }
       } catch (err) {
         if (intervalRef.current) clearInterval(intervalRef.current);
         intervalRef.current = null;
+        setIsPolling(false);
         setError(err instanceof Error ? err.message : "Failed to refresh run");
       }
     }
 
     async function fetchRun() {
       setError("");
+      setRun(null);
       setTrades([]);
       setTradeTotal(0);
       setTradePage(0);
+      setIsPolling(false);
+      setLastRunRefreshAt(null);
 
       try {
         const currentRun = await apiFetch<Run>(`/api/v1/runs/${id}`);
         setRun(currentRun);
+        setLastRunRefreshAt(new Date());
 
-        if (currentRun.status === "pending" || currentRun.status === "running") {
+        if (isActiveRun(currentRun)) {
+          setIsPolling(true);
           intervalRef.current = setInterval(() => {
             void pollRun();
-          }, 3000);
+          }, RUN_POLL_INTERVAL_MS);
         }
       } catch (err) {
+        setIsPolling(false);
         setError(err instanceof Error ? err.message : "Failed to load run");
       }
     }
@@ -238,8 +261,16 @@ export default function RunDetailPage({
 
   if (!run) {
     return (
-      <div className="px-6 py-10">
-        <p className={error ? "text-red-400" : "text-zinc-400"}>{error || "Loading..."}</p>
+      <div className="mx-auto w-full max-w-6xl px-6 py-10">
+        {error ? (
+          <p className="rounded border border-red-800 bg-red-950 px-3 py-2 text-sm text-red-300">
+            {error}
+          </p>
+        ) : (
+          <LoadingPanel>
+            <InlineProgress label="Loading run detail..." />
+          </LoadingPanel>
+        )}
       </div>
     );
   }
@@ -249,6 +280,7 @@ export default function RunDetailPage({
   const metrics = run.metrics as unknown as Record<string, number>;
   const hasMetrics = run.status === "completed" && Object.keys(run.metrics ?? {}).length > 0;
   const totalTradePages = Math.max(1, Math.ceil(tradeTotal / TRADE_PAGE_SIZE));
+  const activeRun = isActiveRun(run);
 
   function updateTradeSort(sortBy: string) {
     if (sortBy === tradeSortBy) {
@@ -301,10 +333,12 @@ export default function RunDetailPage({
         </div>
       )}
 
-      {run.status !== "completed" && run.status !== "failed" && (
-        <div className="mt-6 rounded border border-zinc-800 bg-zinc-900 p-4 text-sm text-zinc-300">
-          This run is {run.status}. Results will appear here when the worker finishes.
-        </div>
+      {activeRun && (
+        <RunProgressPanel
+          run={run}
+          isPolling={isPolling}
+          lastRunRefreshAt={lastRunRefreshAt}
+        />
       )}
 
       {error && (
@@ -330,7 +364,7 @@ export default function RunDetailPage({
         </div>
       </section>
 
-      {hasMetrics && (
+      {hasMetrics ? (
         <section className="mt-8">
           <h2 className="text-lg font-semibold">Metrics</h2>
           <div className="mt-4 grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -347,7 +381,9 @@ export default function RunDetailPage({
             })}
           </div>
         </section>
-      )}
+      ) : activeRun ? (
+        <PendingMetricsPanel />
+      ) : null}
 
       {run.status === "completed" && chartData.length > 0 ? (
         <section className="mt-8">
@@ -400,6 +436,11 @@ export default function RunDetailPage({
         </section>
       ) : run.status === "completed" ? (
         <EmptyPanel title="Equity Curve" message="No equity curve artifact was stored for this run." />
+      ) : activeRun ? (
+        <PendingChartPanel
+          title="Equity Curve"
+          message="Equity data will appear after the worker stores run artifacts."
+        />
       ) : null}
 
       {run.status === "completed" && chartData.length > 0 && (
@@ -432,7 +473,15 @@ export default function RunDetailPage({
         </section>
       )}
 
-      {run.status === "completed" && (
+      {activeRun ? (
+        <PendingChartPanel
+          title="Drawdown"
+          message="Drawdown will be calculated from the completed equity curve."
+          compact
+        />
+      ) : null}
+
+      {run.status === "completed" ? (
         <section className="mt-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-semibold">Trades ({tradeTotal})</h2>
@@ -520,7 +569,9 @@ export default function RunDetailPage({
             </>
           )}
         </section>
-      )}
+      ) : activeRun ? (
+        <PendingTradesPanel />
+      ) : null}
     </div>
   );
 }
@@ -542,5 +593,102 @@ function EmptyPanel({ title, message }: { title: string; message: string }) {
         {message}
       </p>
     </section>
+  );
+}
+
+function RunProgressPanel({
+  run,
+  isPolling,
+  lastRunRefreshAt,
+}: {
+  run: Run;
+  isPolling: boolean;
+  lastRunRefreshAt: Date | null;
+}) {
+  const statusDetail =
+    run.status === "pending"
+      ? "Queued for the worker. No metrics have been written yet."
+      : "Worker is executing the strategy and will write metrics, trades, and artifacts when complete.";
+
+  return (
+    <div className="mt-6 rounded border border-blue-900/70 bg-blue-950/20 p-4 text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="font-medium text-blue-200">Run in progress</p>
+          <p className="mt-1 text-zinc-300">{statusDetail}</p>
+        </div>
+        <RunStatusBadge status={run.status} />
+      </div>
+      <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-zinc-400">
+        {isPolling ? (
+          <InlineProgress
+            label={`Checking every ${RUN_POLL_INTERVAL_MS / 1000}s`}
+            className="text-xs"
+          />
+        ) : (
+          <span>Polling paused</span>
+        )}
+        <span>Last checked: {formatRefreshTime(lastRunRefreshAt)}</span>
+        <span>Created: {new Date(run.created_at).toLocaleString()}</span>
+        {run.started_at ? <span>Started: {new Date(run.started_at).toLocaleString()}</span> : null}
+      </div>
+    </div>
+  );
+}
+
+function PendingMetricsPanel() {
+  return (
+    <LoadingPanel title="Metrics">
+      <div className="grid grid-cols-2 gap-x-8 gap-y-4 sm:grid-cols-3 lg:grid-cols-4">
+        {metricLabels.slice(0, 8).map(([key, label]) => (
+          <div key={key}>
+            <p className="text-xs text-zinc-500">{label}</p>
+            <SkeletonBlock className="mt-2 h-4 w-16" />
+          </div>
+        ))}
+      </div>
+      <p className="mt-4 text-sm text-zinc-500">Metrics will appear when the run completes.</p>
+    </LoadingPanel>
+  );
+}
+
+function PendingChartPanel({
+  title,
+  message,
+  compact = false,
+}: {
+  title: string;
+  message: string;
+  compact?: boolean;
+}) {
+  return (
+    <LoadingPanel title={title}>
+      <SkeletonBlock className={`${compact ? "h-52" : "h-72"} w-full`} />
+      <p className="mt-4 text-sm text-zinc-500">{message}</p>
+    </LoadingPanel>
+  );
+}
+
+function PendingTradesPanel() {
+  return (
+    <LoadingPanel title="Trades">
+      <div className="space-y-3">
+        <div className="grid grid-cols-6 gap-3">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <SkeletonBlock key={index} className="h-3" />
+          ))}
+        </div>
+        {Array.from({ length: 4 }).map((_, row) => (
+          <div key={row} className="grid grid-cols-6 gap-3">
+            {Array.from({ length: 6 }).map((__, column) => (
+              <SkeletonBlock key={column} className="h-4" />
+            ))}
+          </div>
+        ))}
+      </div>
+      <p className="mt-4 text-sm text-zinc-500">
+        Trades will load after the completed run is available.
+      </p>
+    </LoadingPanel>
   );
 }

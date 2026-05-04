@@ -1,13 +1,15 @@
 import uuid
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.strategy import Strategy
 from app.schemas.strategy import StrategyCreate, StrategyUpdate
+from app.services.strategy_validation_service import validate_strategy_code_for_api
 
 
 async def create_strategy(db: AsyncSession, data: StrategyCreate) -> Strategy:
+    validate_strategy_code_for_api(data.code)
     strategy = Strategy(**data.model_dump())
     db.add(strategy)
     await db.commit()
@@ -38,6 +40,7 @@ async def update_strategy(
     updates = data.model_dump(exclude_unset=True)
     if updates:
         if "code" in updates:
+            validate_strategy_code_for_api(updates["code"])
             strategy.version += 1
         for key, value in updates.items():
             setattr(strategy, key, value)

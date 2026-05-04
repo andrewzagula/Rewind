@@ -5,12 +5,17 @@ from fastapi import APIRouter, HTTPException
 from app.core.deps import DbSession
 from app.schemas.strategy import StrategyCreate, StrategyResponse, StrategyUpdate
 from app.services import strategy_service
+from app.services.strategy_validation_service import (
+    StrategyCodeValidationError,
+    validate_strategy_code_for_api,
+)
 
 router = APIRouter(prefix="/strategies", tags=["strategies"])
 
 
 @router.post("", response_model=StrategyResponse, status_code=201)
 async def create_strategy(data: StrategyCreate, db: DbSession) -> StrategyResponse:
+    _raise_for_invalid_strategy_code(data.code)
     strategy = await strategy_service.create_strategy(db, data)
     return StrategyResponse.model_validate(strategy)
 
@@ -33,6 +38,8 @@ async def get_strategy(strategy_id: uuid.UUID, db: DbSession) -> StrategyRespons
 async def update_strategy(
     strategy_id: uuid.UUID, data: StrategyUpdate, db: DbSession
 ) -> StrategyResponse:
+    if data.code is not None:
+        _raise_for_invalid_strategy_code(data.code)
     strategy = await strategy_service.update_strategy(db, strategy_id, data)
     if strategy is None:
         raise HTTPException(status_code=404, detail="Strategy not found")
@@ -44,3 +51,10 @@ async def delete_strategy(strategy_id: uuid.UUID, db: DbSession) -> None:
     deleted = await strategy_service.delete_strategy(db, strategy_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Strategy not found")
+
+
+def _raise_for_invalid_strategy_code(code: str) -> None:
+    try:
+        validate_strategy_code_for_api(code)
+    except StrategyCodeValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

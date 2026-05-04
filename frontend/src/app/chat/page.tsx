@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
+import { InlineProgress, SkeletonBlock, SkeletonText } from "@/components/progress";
 import { apiEventStream, apiFetch } from "@/lib/api";
 import type {
   ApplyCodeActionPayload,
@@ -29,7 +30,7 @@ const RUN_POLL_INTERVAL_MS = 3000;
 const TERMINAL_RUN_STATUSES = new Set<Run["status"]>(["completed", "failed"]);
 
 interface ActionProgress {
-  status: "creating" | Run["status"];
+  status: "creating" | "recording" | Run["status"];
   detail: string;
   href?: string;
 }
@@ -243,6 +244,7 @@ function actionStatusClass(status: ChatAction["status"] | ActionProgress["status
   if (status === "completed") return "border-green-800 bg-green-950/30 text-green-300";
   if (status === "failed") return "border-red-800 bg-red-950/30 text-red-300";
   if (status === "cancelled") return "border-zinc-700 bg-zinc-900 text-zinc-400";
+  if (status === "recording") return "border-cyan-800 bg-cyan-950/30 text-cyan-300";
   if (status === "running") return "border-amber-800 bg-amber-950/30 text-amber-300";
   if (status === "creating" || status === "pending") {
     return "border-blue-800 bg-blue-950/30 text-blue-300";
@@ -304,15 +306,69 @@ function wait(ms: number): Promise<void> {
 
 export default function ChatPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="mx-auto w-full max-w-6xl px-6 py-10 text-sm text-zinc-400">
-          Loading chat...
-        </div>
-      }
-    >
+    <Suspense fallback={<ChatPageSkeleton />}>
       <ChatPageClient />
     </Suspense>
+  );
+}
+
+function ChatPageSkeleton() {
+  return (
+    <div className="mx-auto grid w-full max-w-6xl flex-1 gap-6 px-6 py-10 lg:grid-cols-[18rem_1fr]">
+      <aside className="border-b border-zinc-800 pb-5 lg:min-h-[32rem] lg:border-b-0 lg:border-r lg:pb-0 lg:pr-4">
+        <div className="flex items-center justify-between gap-3">
+          <SkeletonBlock className="h-7 w-20" />
+          <SkeletonBlock className="h-8 w-16" />
+        </div>
+        <SessionListSkeleton className="mt-5" />
+      </aside>
+      <main className="flex min-h-[32rem] flex-col">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 pb-4">
+          <div>
+            <SkeletonBlock className="h-6 w-36" />
+            <SkeletonBlock className="mt-3 h-4 w-56" />
+          </div>
+          <SkeletonBlock className="h-8 w-20" />
+        </div>
+        <MessageListSkeleton className="mt-5 flex-1" />
+        <div className="mt-5 border-t border-zinc-800 pt-4">
+          <SkeletonBlock className="h-28 w-full" />
+          <div className="mt-3 flex justify-end">
+            <SkeletonBlock className="h-9 w-20" />
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function SessionListSkeleton({ className = "" }: { className?: string }) {
+  return (
+    <div className={`space-y-2 ${className}`}>
+      {Array.from({ length: 4 }).map((_, index) => (
+        <div key={index} className="rounded border border-zinc-800 bg-zinc-900 p-3">
+          <SkeletonBlock className="h-4 w-32" />
+          <SkeletonBlock className="mt-3 h-3 w-20" />
+          <SkeletonBlock className="mt-2 h-3 w-28" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MessageListSkeleton({ className = "" }: { className?: string }) {
+  return (
+    <div className={`space-y-4 ${className}`}>
+      {Array.from({ length: 3 }).map((_, index) => (
+        <div key={index} className="rounded border border-zinc-800 bg-zinc-900 p-4">
+          <div className="flex items-center justify-between gap-2">
+            <SkeletonBlock className="h-3 w-20" />
+            <SkeletonBlock className="h-3 w-24" />
+          </div>
+          <SkeletonText rows={index === 1 ? 4 : 3} className="mt-4" />
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -527,6 +583,10 @@ function ChatPageClient() {
       if (!isApplyCodePayload(action.payload)) {
         throw new Error("Apply-code action payload is invalid.");
       }
+      setActionProgressForKey(key, {
+        status: "running",
+        detail: `Updating strategy ${action.payload.strategy_id.slice(0, 8)}...`,
+      });
       const strategy = await apiFetch<Strategy>(
         `/api/v1/strategies/${action.payload.strategy_id}`,
         {
@@ -547,6 +607,10 @@ function ChatPageClient() {
       if (!isRunBacktestPayload(action.payload)) {
         throw new Error("Run-backtest action payload is invalid.");
       }
+      setActionProgressForKey(key, {
+        status: "creating",
+        detail: `Submitting backtest for strategy ${action.payload.strategy_id.slice(0, 8)}...`,
+      });
       const run = await apiFetch<Run>("/api/v1/runs", {
         method: "POST",
         body: JSON.stringify({
@@ -580,6 +644,10 @@ function ChatPageClient() {
           code: action.payload.code,
         }),
       });
+      setActionProgressForKey(key, {
+        status: "creating",
+        detail: `Submitting backtest for "${action.payload.name}".`,
+      });
       const run = await apiFetch<Run>("/api/v1/runs", {
         method: "POST",
         body: JSON.stringify({
@@ -611,6 +679,10 @@ function ChatPageClient() {
       if (!isCompareRunsPayload(action.payload)) {
         throw new Error("Compare-runs action payload is invalid.");
       }
+      setActionProgressForKey(key, {
+        status: "running",
+        detail: `Preparing comparison for ${action.payload.run_ids.length} runs.`,
+      });
       return {
         result: { run_ids: action.payload.run_ids },
         href: `/compare?runs=${encodeURIComponent(action.payload.run_ids.join(","))}`,
@@ -652,6 +724,11 @@ function ChatPageClient() {
     }
 
     try {
+      setActionProgressForKey(key, {
+        status: "recording",
+        detail: "Recording action result in chat history.",
+        href: execution.href,
+      });
       await recordActionAudit(message, action, {
         status: execution.auditStatus ?? "completed",
         result: execution.result,
@@ -677,11 +754,20 @@ function ChatPageClient() {
     setActionBusyKey(key);
     setError("");
     try {
+      setActionProgressForKey(key, {
+        status: "recording",
+        detail: "Recording cancellation in chat history.",
+      });
       await recordActionAudit(message, action, { status: "cancelled", result: {} });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to cancel action.");
     } finally {
       setActionBusyKey(null);
+      setActionProgress((current) => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
     }
   }
 
@@ -710,7 +796,7 @@ function ChatPageClient() {
 
         <div className="mt-5 space-y-2">
           {loadingSessions ? (
-            <p className="text-sm text-zinc-400">Loading...</p>
+            <SessionListSkeleton />
           ) : sessions.length === 0 ? (
             <p className="text-sm text-zinc-500">No sessions yet</p>
           ) : (
@@ -785,8 +871,8 @@ function ChatPageClient() {
 
         <section className="mt-5 flex-1 overflow-y-auto">
           {loadingMessages ? (
-            <p className="text-sm text-zinc-400">Loading...</p>
-          ) : messages.length === 0 && !streamingText ? (
+            <MessageListSkeleton />
+          ) : messages.length === 0 && !streamingText && !sending ? (
             <div className="rounded border border-zinc-800 bg-zinc-900 p-5 text-sm text-zinc-500">
               No messages yet
             </div>
@@ -803,16 +889,7 @@ function ChatPageClient() {
                   actionProgress={actionProgress}
                 />
               ))}
-              {streamingText ? (
-                <div className="rounded border border-zinc-800 bg-zinc-900 p-4">
-                  <p className="text-xs font-medium uppercase text-zinc-500">
-                    Assistant
-                  </p>
-                  <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-zinc-100">
-                    {streamingText}
-                  </p>
-                </div>
-              ) : null}
+              {sending ? <StreamingAssistantMessage content={streamingText} /> : null}
             </div>
           )}
         </section>
@@ -911,6 +988,22 @@ function MessageBubble({
   );
 }
 
+function StreamingAssistantMessage({ content }: { content: string }) {
+  return (
+    <div className="rounded border border-blue-900/70 bg-blue-950/20 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-medium uppercase text-blue-300">Assistant</p>
+        <InlineProgress label="Assistant is responding" className="text-xs" />
+      </div>
+      {content ? (
+        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-zinc-100">{content}</p>
+      ) : (
+        <p className="mt-2 text-sm text-zinc-500">Waiting for the first response chunk...</p>
+      )}
+    </div>
+  );
+}
+
 function ActionCard({
   message,
   action,
@@ -931,6 +1024,11 @@ function ActionCard({
   const resultText = actionResultText(action);
   const runHref = progress?.href ?? actionRunHref(action);
   const visibleStatus = progress?.status ?? action.status;
+  const progressIsActive =
+    progress?.status === "creating" ||
+    progress?.status === "pending" ||
+    progress?.status === "running" ||
+    progress?.status === "recording";
 
   return (
     <div className="rounded border border-zinc-800 bg-zinc-950 p-3">
@@ -948,7 +1046,21 @@ function ActionCard({
         </span>
       </div>
 
-      {progress ? <p className="mt-3 text-xs text-blue-300">{progress.detail}</p> : null}
+      {progress ? (
+        <div className="mt-3">
+          {progressIsActive ? (
+            <InlineProgress label={progress.detail} className="text-xs text-blue-300" />
+          ) : (
+            <p
+              className={`text-xs ${
+                progress.status === "failed" ? "text-red-300" : "text-zinc-400"
+              }`}
+            >
+              {progress.detail}
+            </p>
+          )}
+        </div>
+      ) : null}
       {resultText ? <p className="mt-3 text-xs text-zinc-400">{resultText}</p> : null}
       {runHref ? (
         <a

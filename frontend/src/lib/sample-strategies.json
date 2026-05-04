@@ -1,0 +1,49 @@
+[
+  {
+    "id": "buy-and-hold",
+    "name": "BuyAndHoldStrategy",
+    "description": "Buys the selected symbol once and holds the position for the rest of the run.",
+    "tags": ["starter", "baseline"],
+    "defaultParams": {
+      "quantity": 10
+    },
+    "code": "from engine import Strategy, Signal\n\n\nclass BuyAndHoldStrategy(Strategy):\n    def init(self, params):\n        self.quantity = float(params.get(\"quantity\", 10))\n\n    def next(self, row, portfolio):\n        symbol = row[\"symbol\"]\n        if symbol not in portfolio.position_symbols:\n            return Signal(\n                symbol=symbol,\n                side=\"buy\",\n                quantity=self.quantity,\n                reason=\"Initial buy-and-hold entry\",\n            )\n        return None\n"
+  },
+  {
+    "id": "sma-crossover",
+    "name": "SMACrossoverStrategy",
+    "description": "Buys when a fast moving average rises above a slow moving average and exits when it falls back below.",
+    "tags": ["trend", "moving average"],
+    "defaultParams": {
+      "fast_window": 20,
+      "slow_window": 50,
+      "quantity": 10
+    },
+    "code": "from engine import Strategy, Signal\n\n\nclass SMACrossoverStrategy(Strategy):\n    def init(self, params):\n        self.fast_window = max(1, int(params.get(\"fast_window\", 20)))\n        self.slow_window = max(self.fast_window + 1, int(params.get(\"slow_window\", 50)))\n        self.quantity = float(params.get(\"quantity\", 10))\n        self.closes = []\n\n    def next(self, row, portfolio):\n        symbol = row[\"symbol\"]\n        close = float(row[\"close\"])\n        self.closes.append(close)\n\n        if len(self.closes) < self.slow_window:\n            return None\n\n        fast_average = sum(self.closes[-self.fast_window:]) / self.fast_window\n        slow_average = sum(self.closes[-self.slow_window:]) / self.slow_window\n        position = portfolio.get_position(symbol)\n\n        if fast_average > slow_average and position.quantity <= 0:\n            return Signal(\n                symbol=symbol,\n                side=\"buy\",\n                quantity=self.quantity,\n                reason=\"Fast SMA crossed above slow SMA\",\n            )\n\n        if fast_average < slow_average and position.quantity > 0:\n            return Signal(\n                symbol=symbol,\n                side=\"sell\",\n                quantity=position.quantity,\n                reason=\"Fast SMA crossed below slow SMA\",\n            )\n\n        return None\n"
+  },
+  {
+    "id": "rsi-mean-reversion",
+    "name": "RSIMeanReversionStrategy",
+    "description": "Buys oversold pullbacks and exits when RSI recovers into overbought territory.",
+    "tags": ["mean reversion", "oscillator"],
+    "defaultParams": {
+      "period": 14,
+      "oversold": 30,
+      "overbought": 70,
+      "quantity": 10
+    },
+    "code": "from engine import Strategy, Signal\n\n\nclass RSIMeanReversionStrategy(Strategy):\n    def init(self, params):\n        self.period = max(2, int(params.get(\"period\", 14)))\n        self.oversold = float(params.get(\"oversold\", 30))\n        self.overbought = float(params.get(\"overbought\", 70))\n        self.quantity = float(params.get(\"quantity\", 10))\n        self.closes = []\n\n    def next(self, row, portfolio):\n        symbol = row[\"symbol\"]\n        close = float(row[\"close\"])\n        self.closes.append(close)\n\n        if len(self.closes) <= self.period:\n            return None\n\n        gains = []\n        losses = []\n        start = len(self.closes) - self.period\n        for index in range(start, len(self.closes)):\n            change = self.closes[index] - self.closes[index - 1]\n            if change >= 0:\n                gains.append(change)\n            else:\n                losses.append(abs(change))\n\n        average_gain = sum(gains) / self.period\n        average_loss = sum(losses) / self.period\n        rsi = 100.0 if average_loss == 0 else 100.0 - (100.0 / (1.0 + average_gain / average_loss))\n        position = portfolio.get_position(symbol)\n\n        if rsi < self.oversold and position.quantity <= 0:\n            return Signal(\n                symbol=symbol,\n                side=\"buy\",\n                quantity=self.quantity,\n                reason=\"RSI moved below oversold threshold\",\n            )\n\n        if rsi > self.overbought and position.quantity > 0:\n            return Signal(\n                symbol=symbol,\n                side=\"sell\",\n                quantity=position.quantity,\n                reason=\"RSI moved above overbought threshold\",\n            )\n\n        return None\n"
+  },
+  {
+    "id": "momentum",
+    "name": "MomentumStrategy",
+    "description": "Buys when lookback return is positive enough and exits when momentum fades.",
+    "tags": ["trend", "momentum"],
+    "defaultParams": {
+      "lookback": 20,
+      "threshold": 0.03,
+      "quantity": 10
+    },
+    "code": "from engine import Strategy, Signal\n\n\nclass MomentumStrategy(Strategy):\n    def init(self, params):\n        self.lookback = max(1, int(params.get(\"lookback\", 20)))\n        self.threshold = float(params.get(\"threshold\", 0.03))\n        self.quantity = float(params.get(\"quantity\", 10))\n        self.closes = []\n\n    def next(self, row, portfolio):\n        symbol = row[\"symbol\"]\n        close = float(row[\"close\"])\n        self.closes.append(close)\n\n        if len(self.closes) <= self.lookback:\n            return None\n\n        reference_close = self.closes[-self.lookback - 1]\n        if reference_close == 0:\n            return None\n\n        momentum = close / reference_close - 1.0\n        position = portfolio.get_position(symbol)\n\n        if momentum >= self.threshold and position.quantity <= 0:\n            return Signal(\n                symbol=symbol,\n                side=\"buy\",\n                quantity=self.quantity,\n                reason=\"Lookback momentum exceeded threshold\",\n            )\n\n        if momentum <= 0 and position.quantity > 0:\n            return Signal(\n                symbol=symbol,\n                side=\"sell\",\n                quantity=position.quantity,\n                reason=\"Momentum faded below zero\",\n            )\n\n        return None\n"
+  }
+]

@@ -2,7 +2,7 @@
 
 AI-native quant research environment for designing, testing, analyzing, and refining trading strategies with an AI assistant in the loop.
 
-This README describes the intended end-state product for Rewind: the experience, workflows, and platform scope this repository is being built toward.
+This README describes the current Rewind product direction and the local development workflow.
 
 ## The Product
 
@@ -147,17 +147,19 @@ The full vision for Rewind extends beyond a single backtest UI.
 
 ## Technology
 
-| Layer | Planned Stack |
+| Layer | Current Stack |
 |---|---|
-| Frontend | Next.js, TypeScript, Tailwind, Plotly, Monaco |
-| Backend API | FastAPI, Pydantic, SQLAlchemy |
-| Backtest Engine | Python, NumPy, Polars |
+| Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS 4, Recharts |
+| Backend API | FastAPI, Pydantic v2, SQLAlchemy 2 async |
+| Backtest Engine | Python, NumPy, pandas |
 | Data Access | DuckDB, PyArrow, Parquet |
 | Metadata Store | PostgreSQL |
 | Queue / Streaming Support | Redis, Arq |
 | AI Layer | OpenAI API with structured prompting and streaming chat |
 
 ## Local Development
+
+For the first-run walkthrough, use [Local Onboarding](docs/local-onboarding.md). For strategy code rules and examples, use [Strategy Authoring Guide](docs/strategy-authoring.md).
 
 ```bash
 cp .env.example .env
@@ -175,6 +177,8 @@ To generate the sample dataset:
 ```bash
 docker compose exec backend python scripts/seed_data.py
 ```
+
+Then open [http://localhost:3000/strategies/new](http://localhost:3000/strategies/new), choose a sample strategy, create it, and run a backtest.
 
 ## License
 

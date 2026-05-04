@@ -1,12 +1,16 @@
 import uuid
 
-from arq.connections import ArqRedis, create_pool, RedisSettings
+from arq.connections import ArqRedis, RedisSettings, create_pool
 from fastapi import APIRouter, HTTPException
 
 from app.core.config import settings
 from app.core.deps import DbSession
 from app.schemas.run import RunCreate, RunResponse, TradeResponse
 from app.services import run_service, strategy_service
+from app.services.strategy_validation_service import (
+    StrategyCodeValidationError,
+    validate_strategy_code_for_api,
+)
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
@@ -20,12 +24,18 @@ async def create_run(data: RunCreate, db: DbSession) -> RunResponse:
     strategy = await strategy_service.get_strategy(db, data.strategy_id)
     if strategy is None:
         raise HTTPException(status_code=404, detail="Strategy not found")
+    try:
+        validate_strategy_code_for_api(strategy.code)
+    except StrategyCodeValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     run = await run_service.create_run(db, data)
 
     pool = await _get_arq_pool()
-    await pool.enqueue_job("run_backtest", str(run.id))
-    await pool.aclose()
+    try:
+        await pool.enqueue_job("run_backtest", str(run.id))
+    finally:
+        await pool.aclose()
 
     return RunResponse.model_validate(run)
 

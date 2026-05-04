@@ -268,9 +268,9 @@ export default function ComparePageClient() {
           <p className="mt-4 rounded border border-zinc-800 bg-zinc-900 p-4 text-sm text-zinc-400">
             Loading recent runs...
           </p>
-        ) : recentRuns.length === 0 ? (
+        ) : recentRuns.length === 0 && !runsError ? (
           <EmptyPanel message="No runs are available yet. Start a backtest from a strategy page first." />
-        ) : (
+        ) : recentRuns.length > 0 ? (
           <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {recentRuns.map((run) => (
               <label
@@ -299,7 +299,7 @@ export default function ComparePageClient() {
               </label>
             ))}
           </div>
-        )}
+        ) : null}
       </section>
 
       {selectedRunIds.length < 2 ? (

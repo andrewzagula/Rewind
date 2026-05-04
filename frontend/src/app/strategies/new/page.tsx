@@ -3,12 +3,12 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { sampleStrategies, type SampleStrategy } from "@/lib/sample-strategies";
 import type { GeneratedStrategyDraft, Strategy } from "@/lib/types";
 
 const GENERATED_STRATEGY_DRAFT_KEY = "rewind.generatedStrategyDraft.v1";
 
-const DEFAULT_CODE = `from engine.strategy import Strategy
-from engine.signal import Signal
+const DEFAULT_CODE = `from engine import Strategy, Signal
 
 
 class MyStrategy(Strategy):
@@ -82,6 +82,7 @@ function NewStrategyPageClient() {
   const [generatedDraft, setGeneratedDraft] = useState<GeneratedStrategyDraft | null>(
     initialDraft.draft
   );
+  const [selectedSampleId, setSelectedSampleId] = useState<string | null>(null);
   const [draftError, setDraftError] = useState(initialDraft.error);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -111,12 +112,78 @@ function NewStrategyPageClient() {
     setGeneratedDraft(null);
     setDraftError("");
     setCode(DEFAULT_CODE);
+    setSelectedSampleId(null);
+    router.replace("/strategies/new", { scroll: false });
+  }
+
+  function selectSampleStrategy(sample: SampleStrategy) {
+    sessionStorage.removeItem(GENERATED_STRATEGY_DRAFT_KEY);
+    setGeneratedDraft(null);
+    setDraftError("");
+    setSelectedSampleId(sample.id);
+    setName(sample.name);
+    setDescription(sample.description);
+    setCode(sample.code);
     router.replace("/strategies/new", { scroll: false });
   }
 
   return (
-    <div className="mx-auto w-full max-w-4xl px-6 py-10">
-      <h1 className="text-2xl font-bold">New Strategy</h1>
+    <div className="mx-auto w-full max-w-5xl px-6 py-10">
+      <div>
+        <h1 className="text-2xl font-bold">New Strategy</h1>
+        <p className="mt-2 max-w-2xl text-sm text-zinc-400">
+          Start from a runnable sample or paste your own strategy code.
+        </p>
+      </div>
+
+      <section className="mt-8">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">Sample Strategies</h2>
+            <p className="mt-1 text-sm text-zinc-400">
+              Templates use the current Strategy interface and work with default run params.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {sampleStrategies.map((sample) => {
+            const isSelected = sample.id === selectedSampleId;
+            return (
+              <button
+                type="button"
+                key={sample.id}
+                onClick={() => selectSampleStrategy(sample)}
+                className={`rounded border p-4 text-left transition ${
+                  isSelected
+                    ? "border-blue-500 bg-blue-950/30"
+                    : "border-zinc-800 bg-zinc-900 hover:border-zinc-700"
+                }`}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-medium text-zinc-100">{sample.name}</p>
+                  {isSelected ? (
+                    <span className="rounded bg-blue-600 px-2 py-0.5 text-xs text-white">
+                      Selected
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-2 text-sm text-zinc-400">{sample.description}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {sample.tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="rounded border border-zinc-700 px-2 py-0.5 text-xs text-zinc-400"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </section>
 
       {generatedDraft ? (
         <div className="mt-6 rounded border border-blue-800 bg-blue-950/30 p-4 text-sm">

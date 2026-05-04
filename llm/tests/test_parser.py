@@ -123,6 +123,24 @@ def test_validate_generated_strategy_response_rejects_multiple_strategy_classes(
     assert result.errors == ["Expected exactly one class that extends Strategy."]
 
 
+def test_validate_generated_strategy_response_rejects_unsafe_strategy_code():
+    result = validate_generated_strategy_response(
+        "```python\n"
+        "from engine import Strategy\n\n"
+        "class UnsafeStrategy(Strategy):\n"
+        "    def init(self, params):\n"
+        "        eval('1 + 1')\n"
+        "    def next(self, row, portfolio):\n"
+        "        return None\n"
+        "```"
+    )
+
+    assert result is not None
+    assert result.valid is False
+    assert result.class_name == "UnsafeStrategy"
+    assert "Calling 'eval' is not allowed in strategy code." in result.errors
+
+
 def test_parse_assistant_actions_accepts_valid_actions():
     strategy_id = "11111111-1111-1111-1111-111111111111"
     run_id_1 = "22222222-2222-2222-2222-222222222222"
