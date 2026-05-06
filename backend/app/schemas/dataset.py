@@ -21,6 +21,8 @@ class DatasetResponse(BaseModel):
     start_date: date
     end_date: date
     row_count: int
+    file_path: str
+    checksum: str
     created_at: datetime
 
     model_config = {"from_attributes": True}

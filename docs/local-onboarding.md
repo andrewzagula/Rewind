@@ -21,7 +21,7 @@ If you want chat responses from OpenAI, set `OPENAI_API_KEY` in `.env` before st
 
 ## 2. Seed Sample Data
 
-The worker reads local Parquet files from `data/sample`. The repository usually includes sample files for `AAPL`, `SPY`, `TSLA`, `MSFT`, and `GOOG`. Regenerate them with:
+The worker reads local Parquet files from `data/sample`. The repository usually includes sample files for `AAPL`, `SPY`, `TSLA`, `MSFT`, and `GOOG`. Database migrations register those sample files as selectable datasets. Regenerate the Parquet files with:
 
 ```bash
 docker compose exec backend python scripts/seed_data.py
@@ -44,9 +44,10 @@ The backend validates strategy code before saving. If validation fails, the edit
 
 ## 4. Run A Backtest
 
-1. On the strategy detail page, click `Run Backtest`.
-2. Rewind creates a pending run and navigates to the run detail page.
-3. The worker executes the run against default params:
+1. On the strategy detail page, use the dataset selector to choose a registered sample dataset. The AAPL daily sample is selected by default when available.
+2. Click `Run Backtest`.
+3. Rewind creates a pending run and navigates to the run detail page.
+4. The worker executes the run against params derived from the selected dataset:
 
 ```json
 {
@@ -56,9 +57,9 @@ The backend validates strategy code before saving. If validation fails, the edit
 }
 ```
 
-4. Refresh the run detail page after the worker completes if the status has not updated yet.
+5. Refresh the run detail page after the worker completes if the status has not updated yet.
 
-A completed run shows metrics, equity, drawdown, params, and trades. A failed run shows the worker or validation error.
+A completed run shows metrics, equity, drawdown, params, dataset provenance, and trades. A failed run shows the worker or validation error.
 
 ## 5. Compare Runs
 

@@ -12,11 +12,13 @@ def load_bars(
     start: str | None = None,
     end: str | None = None,
     data_dir: Path | None = None,
+    file_path: Path | None = None,
 ) -> list[dict[str, Any]]:
     import duckdb
 
-    directory = data_dir or DATA_DIR
-    file_path = directory / f"{symbol}_{timeframe}.parquet"
+    if file_path is None:
+        directory = data_dir or DATA_DIR
+        file_path = directory / f"{symbol}_{timeframe}.parquet"
 
     if not file_path.exists():
         raise FileNotFoundError(f"No data file found: {file_path}")

@@ -1,184 +1,221 @@
 # Rewind
 
-AI-native quant research environment for designing, testing, analyzing, and refining trading strategies with an AI assistant in the loop.
+Use Rewind locally to write Python trading strategies, run backtests against checked-in sample OHLCV data, and review completed run results.
 
-This README describes the current Rewind product direction and the local development workflow.
+Use it to:
 
-## The Product
+- Create, edit, validate, and delete Python strategy records
+- Run asynchronous backtests through a FastAPI API, Redis, and an Arq worker
+- Simulate portfolio trades over local Parquet OHLCV files
+- Review completed run metrics, equity curves, drawdowns, params, dataset provenance, and trades
+- Compare two or more completed runs with metric deltas and overlaid equity curves
+- Use OpenAI-backed chat for run and comparison context when `OPENAI_API_KEY` is configured
+- Start from sample strategies and sample daily data for `AAPL`, `SPY`, `TSLA`, `MSFT`, and `GOOG`
 
-Rewind is designed to make quantitative research feel like a fast, modern, conversational workflow instead of a collection of disconnected scripts and dashboards.
+Use Rewind for research and backtesting workflows. Trading decisions remain your responsibility.
 
-The core loop is:
+## Stack
 
-**Design -> Test -> Analyze -> Refine -> Repeat**
-
-In the finished product, a user can:
-
-- Write or edit Python strategies in the browser with a dedicated strategy workspace
-- Generate new strategies from natural-language prompts
-- Run asynchronous backtests on versioned datasets
-- Inspect rich run artifacts including metrics, equity curves, drawdowns, and trade logs
-- Compare multiple runs side by side to understand changes in behavior
-- Ask an AI research assistant to explain results, debug weak performance, and suggest improvements
-- Apply those suggestions directly and launch the next run without leaving the app
-
-## What Rewind Looks Like
-
-### Dashboard
-
-The home experience is a research dashboard, not a marketing shell. It surfaces:
-
-- Recent runs
-- Best-performing strategies
-- Active experiments
-- Dataset coverage
-- Quick links back into the research workflow
-
-### Strategy Workspace
-
-Each strategy has a dedicated workspace with:
-
-- A browser-based code editor
-- Versioned strategy code and descriptions
-- Parameter controls
-- Run history
-- Links to prior results and comparisons
-
-This is the place where ideas become executable strategies and where iteration happens fastest.
-
-### Run Analysis
-
-Each backtest run resolves into a detailed analysis view with:
-
-- Equity curve visualization
-- Drawdown chart
-- Trade markers overlaid on charts
-- Full metrics table
-- Paginated trade log
-- Parameters and dataset metadata used for the run
-
-Every run is meant to be reproducible. Results are not just snapshots; they are tracked experiments with enough context to understand exactly what happened.
-
-### Comparison View
-
-Rewind includes a dedicated comparison workflow for evaluating multiple runs at once:
-
-- Side-by-side metrics
-- Overlaid equity curves
-- Run-to-run diffs
-- Clear tradeoff analysis between parameter sets or strategy versions
-
-The goal is to make experiment tracking a first-class feature rather than an afterthought.
-
-### AI Research Assistant
-
-The assistant is the defining feature of Rewind. It is context-aware and tied directly to the strategy and run data the user is looking at.
-
-In the finished product, the assistant can:
-
-- Generate valid strategy code from plain-English requests
-- Explain why a run performed well or poorly using real metrics and trade data
-- Diagnose weak Sharpe, drawdown, turnover, or win-rate behavior
-- Suggest concrete code changes and parameter adjustments
-- Compare runs in natural language
-- Trigger new backtests from chat
-- Maintain persistent research conversations linked to strategies and runs
-
-Typical prompts look like:
-
-- `Create a momentum strategy using 20-day returns on AAPL`
-- `Why did this strategy underperform in Q1 2024?`
-- `Compare this run against the last two versions`
-- `Add a volatility filter and run it again`
-
-## How It Works
-
-Rewind is built as a multi-service research platform:
-
-- `Frontend`: Next.js application for the dashboard, editor, analysis views, and chat UX
-- `Backend API`: FastAPI service for strategies, runs, datasets, comparisons, and chat orchestration
-- `Backtest Worker`: asynchronous execution layer for running strategies against historical data
-- `LLM Service`: prompt orchestration, context assembly, streaming responses, and action generation
-- `Data Layer`: Parquet and DuckDB for historical market data, PostgreSQL for metadata and artifacts, Redis for job dispatch and streaming support
-
-At a high level, the workflow is:
-
-1. A user creates or updates a strategy.
-2. Rewind records the strategy version, parameters, and dataset selection.
-3. A backtest job is queued and executed asynchronously.
-4. Metrics, trades, and artifacts are stored and attached to the run.
-5. The frontend renders analysis views and makes the full context available to the assistant.
-6. The user keeps iterating until the strategy is worth keeping, improving, or discarding.
-
-## Core Product Principles
-
-- **AI-native**: the assistant is built into the research loop, not bolted on afterward
-- **Reproducible**: runs capture strategy version, parameters, datasets, trades, and artifacts
-- **Fast**: local-first backtesting and efficient data access keep iteration tight
-- **Explainable**: users can see what happened and ask why it happened
-- **Modern**: the interface is designed as a real product for research, not a thin UI over scripts
-
-## Planned Platform Scope
-
-The full vision for Rewind extends beyond a single backtest UI.
-
-### Research Features
-
-- Parameter sweeps and optimization runs
-- Walk-forward and out-of-sample testing
-- Slippage, commission, and market-impact modeling
-- Multi-asset and portfolio-level simulation
-- Multi-timeframe strategies
-
-### AI Features
-
-- Autonomous strategy refinement loops
-- Paper-to-strategy generation from uploaded research
-- Factor discovery workflows
-- Multi-step agentic research tooling
-
-### Platform Features
-
-- User accounts and personal workspaces
-- Shared strategies and run collaboration
-- Cloud-executed backtests
-- Strategy publishing and discovery
-- Live paper-trading integrations
-
-## Technology
-
-| Layer | Current Stack |
-|---|---|
+| Area | Stack |
+| --- | --- |
 | Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS 4, Recharts |
-| Backend API | FastAPI, Pydantic v2, SQLAlchemy 2 async |
-| Backtest Engine | Python, NumPy, pandas |
-| Data Access | DuckDB, PyArrow, Parquet |
-| Metadata Store | PostgreSQL |
-| Queue / Streaming Support | Redis, Arq |
-| AI Layer | OpenAI API with structured prompting and streaming chat |
+| API | FastAPI, Pydantic v2, SQLAlchemy 2 async |
+| Worker | Arq, Redis, Python multiprocessing timeout isolation |
+| Backtest engine | Python, pandas, NumPy |
+| Data | Parquet files queried with DuckDB, PyArrow for sample-data generation |
+| Metadata | PostgreSQL |
+| AI chat | OpenAI API, streaming responses, backend-resolved prompt context |
 
-## Local Development
+## Repository Layout
 
-For the first-run walkthrough, use [Local Onboarding](docs/local-onboarding.md). For strategy code rules and examples, use [Strategy Authoring Guide](docs/strategy-authoring.md).
+```text
+backend/      FastAPI app, database models, migrations, worker, API tests
+engine/       Strategy interface, executor, portfolio, metrics, engine tests
+frontend/     Next.js app and UI components
+llm/          Prompt context, OpenAI client wrapper, response parsing
+data/sample/  Checked-in sample OHLCV Parquet files
+docs/         Local onboarding and strategy authoring guides
+scripts/      Utility scripts for database and sample-data setup
+```
+
+## Quick Start
+
+Prerequisites:
+
+- Docker and Docker Compose
+- An OpenAI API key only if you want chat responses
+
+Start the stack:
 
 ```bash
 cp .env.example .env
 docker compose up --build
 ```
 
-Default local endpoints:
+In another terminal, run the database migrations:
+
+```bash
+docker compose exec backend alembic -c migrations/alembic.ini upgrade head
+```
+
+Open:
 
 - Frontend: [http://localhost:3000](http://localhost:3000)
 - Backend API: [http://localhost:8000](http://localhost:8000)
 - API docs: [http://localhost:8000/docs](http://localhost:8000/docs)
 
-To generate the sample dataset:
+Sample Parquet data is checked in under `data/sample`, and the migrations register those files as selectable datasets.
+
+## Configuration
+
+Copy `.env.example` to `.env` before starting the Docker stack:
 
 ```bash
-docker compose exec backend python scripts/seed_data.py
+cp .env.example .env
 ```
 
-Then open [http://localhost:3000/strategies/new](http://localhost:3000/strategies/new), choose a sample strategy, create it, and run a backtest.
+The default values are set up for `docker compose up --build`.
+
+| Variable | Used by | Description | Default in `.env.example` |
+| --- | --- | --- | --- |
+| `DATABASE_URL` | Backend, worker, migrations | Async SQLAlchemy connection string for PostgreSQL. Use the `postgres` host inside Docker. | `postgresql+asyncpg://rewind:rewind@postgres:5432/rewind` |
+| `REDIS_URL` | Backend, worker | Redis connection string for queued backtest jobs. Use the `redis` host inside Docker. | `redis://redis:6379/0` |
+| `OPENAI_API_KEY` | Backend chat API | Enables streaming chat responses. Replace the placeholder with a real key, or set it to an empty value if you do not want chat. | `sk-your-key-here` |
+| `API_URL` | Frontend | Backend URL used by Next.js rewrites for `/api/*` and `/health`. Docker Compose overrides this to `http://backend:8000` for the frontend service. | `http://localhost:8000` |
+| `POSTGRES_USER` | Postgres container | Database username created by the Postgres service. | `rewind` |
+| `POSTGRES_PASSWORD` | Postgres container | Database password created by the Postgres service. | `rewind` |
+| `POSTGRES_DB` | Postgres container | Database name created by the Postgres service. | `rewind` |
+
+The backend also supports `CORS_ORIGINS` through Pydantic settings. If unset, local frontend origins are allowed:
+
+```text
+http://localhost:3000
+http://127.0.0.1:3000
+```
+
+For custom origins, set `CORS_ORIGINS` as a JSON list:
+
+```env
+CORS_ORIGINS=["http://localhost:3000","http://127.0.0.1:3000"]
+```
+
+## First Backtest
+
+1. Open [http://localhost:3000/strategies/new](http://localhost:3000/strategies/new).
+2. Choose a sample strategy.
+3. Create the strategy.
+4. Pick a registered sample dataset on the strategy detail page.
+5. Click `Run Backtest`.
+6. Open the completed run to review metrics, equity, drawdown, params, dataset provenance, and trades.
+
+Runs use the selected dataset and default params unless the UI or API sends different params:
+
+```json
+{
+  "symbol": "AAPL",
+  "timeframe": "1d",
+  "initial_cash": 100000
+}
+```
+
+To compare completed runs, open [http://localhost:3000/compare](http://localhost:3000/compare) and select two or more runs.
+
+## Chat
+
+Chat is optional. Strategy creation, validation, backtesting, run review, and comparison work without OpenAI credentials.
+
+To enable chat, set `OPENAI_API_KEY` in `.env` before starting the services:
+
+```env
+OPENAI_API_KEY=sk-...
+```
+
+Leave `OPENAI_API_KEY` blank if you do not want chat responses.
+
+Chat requests use backend-resolved context for the selected run or comparison. The system prompt instructs the assistant to use provided metrics and artifacts instead of inventing missing data.
+
+## Strategy Authoring
+
+Strategies are Python classes that extend `engine.Strategy` and return `engine.Signal` objects when they want to trade.
+
+Minimal example:
+
+```python
+from engine import Signal, Strategy
+
+
+class MyStrategy(Strategy):
+    def init(self, params):
+        self.quantity = float(params.get("quantity", 10))
+
+    def next(self, row, portfolio):
+        if row["close"] > row["open"]:
+            return Signal(
+                symbol=row["symbol"],
+                side="buy",
+                quantity=self.quantity,
+                reason="Close finished above open",
+            )
+        return None
+```
+
+Strategy code is checked by AST validation rules before it is saved or queued for a run. It must define exactly one `Strategy` subclass with `init()` and `next()`, and the validator blocks selected filesystem, process, network, dynamic import, builtin, and dunder access patterns. Execution also runs in a worker subprocess with a timeout.
+
+Run strategy code you trust.
+
+See [docs/strategy-authoring.md](docs/strategy-authoring.md) for the current interface, allowed imports, signal shape, params, and common validation errors.
+
+## Development
+
+Useful commands:
+
+```bash
+# Start all services
+docker compose up --build
+
+# Run database migrations
+docker compose exec backend alembic -c migrations/alembic.ini upgrade head
+
+# Run Python tests in the backend container
+docker compose exec backend pytest tests engine/tests llm/tests
+
+# Lint the frontend
+docker compose exec frontend pnpm lint
+
+# Build the frontend
+docker compose exec frontend pnpm build
+```
+
+For a guided local walkthrough, see [docs/local-onboarding.md](docs/local-onboarding.md).
+
+## API Surface
+
+Primary endpoints:
+
+- `GET /health`
+- `POST /api/v1/strategies`
+- `GET /api/v1/strategies`
+- `GET /api/v1/strategies/{strategy_id}`
+- `PATCH /api/v1/strategies/{strategy_id}`
+- `DELETE /api/v1/strategies/{strategy_id}`
+- `POST /api/v1/runs`
+- `GET /api/v1/runs`
+- `GET /api/v1/runs/{run_id}`
+- `GET /api/v1/runs/{run_id}/trades`
+- `GET /api/v1/datasets`
+- `GET /api/v1/datasets/{dataset_id}`
+- `GET /api/v1/compare?run_ids=<uuid>,<uuid>`
+- `POST /api/v1/chat`
+- `GET /api/v1/chat/sessions`
+- `GET /api/v1/chat/sessions/{session_id}`
+- `DELETE /api/v1/chat/sessions/{session_id}`
+- `POST /api/v1/chat/messages/{message_id}/actions/{action_id}`
+
+FastAPI serves interactive API documentation at [http://localhost:8000/docs](http://localhost:8000/docs).
+
+## Contributing
+
+Keep changes focused on the current app, engine, backend, frontend, LLM, docs, or test surfaces. Before opening a pull request, run the relevant tests and linters for the area you changed.
 
 ## License
 

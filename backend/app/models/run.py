@@ -12,6 +12,9 @@ class Run(Base):
     __tablename__ = "runs"
 
     strategy_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("strategies.id"))
+    dataset_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("datasets.id"), nullable=True, index=True
+    )
     params: Mapped[dict] = mapped_column(JSONB, default=dict)
     dataset_version: Mapped[str] = mapped_column(String(64), default="")
     metrics: Mapped[dict] = mapped_column(JSONB, default=dict)

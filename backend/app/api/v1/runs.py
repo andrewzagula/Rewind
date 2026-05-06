@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 from app.core.config import settings
 from app.core.deps import DbSession
 from app.schemas.run import RunCreate, RunResponse, TradeResponse
-from app.services import run_service, strategy_service
+from app.services import dataset_service, run_service, strategy_service
 from app.services.strategy_validation_service import (
     StrategyCodeValidationError,
     validate_strategy_code_for_api,
@@ -24,12 +24,20 @@ async def create_run(data: RunCreate, db: DbSession) -> RunResponse:
     strategy = await strategy_service.get_strategy(db, data.strategy_id)
     if strategy is None:
         raise HTTPException(status_code=404, detail="Strategy not found")
+    dataset = None
+    if data.dataset_id is not None:
+        dataset = await dataset_service.get_dataset(db, data.dataset_id)
+        if dataset is None:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+
     try:
         validate_strategy_code_for_api(strategy.code)
     except StrategyCodeValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    run = await run_service.create_run(db, data)
+    try:
+        run = await run_service.create_run(db, data, dataset=dataset)
+    except run_service.DatasetRunValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     pool = await _get_arq_pool()
     try:

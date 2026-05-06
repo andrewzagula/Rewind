@@ -3,15 +3,53 @@ import uuid
 from sqlalchemy import asc, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.dataset import Dataset
 from app.models.run import Run
 from app.models.trade import Trade
 from app.schemas.run import RunCreate
 
 
-async def create_run(db: AsyncSession, data: RunCreate) -> Run:
+class DatasetRunValidationError(Exception):
+    pass
+
+
+def build_dataset_run_params(data: RunCreate, dataset: Dataset | None) -> dict:
+    params = dict(data.params or {})
+    if dataset is None:
+        return params
+
+    if not dataset.symbols:
+        raise DatasetRunValidationError("Dataset must include at least one symbol")
+
+    dataset_symbol = dataset.symbols[0]
+    requested_symbol = params.get("symbol")
+    requested_timeframe = params.get("timeframe")
+
+    if requested_symbol is not None and requested_symbol not in dataset.symbols:
+        raise DatasetRunValidationError(
+            f"Dataset does not contain symbol {requested_symbol!s}"
+        )
+    if requested_timeframe is not None and requested_timeframe != dataset.timeframe:
+        raise DatasetRunValidationError(
+            f"Dataset timeframe is {dataset.timeframe}, not {requested_timeframe!s}"
+        )
+
+    params.setdefault("symbol", dataset_symbol)
+    params.setdefault("timeframe", dataset.timeframe)
+    return params
+
+
+async def create_run(
+    db: AsyncSession,
+    data: RunCreate,
+    dataset: Dataset | None = None,
+) -> Run:
+    params = build_dataset_run_params(data, dataset)
     run = Run(
         strategy_id=data.strategy_id,
-        params=data.params,
+        dataset_id=dataset.id if dataset is not None else None,
+        dataset_version=dataset.checksum if dataset is not None else "",
+        params=params,
         status="pending",
     )
     db.add(run)

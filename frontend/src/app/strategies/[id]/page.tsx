@@ -5,7 +5,7 @@ import { use, useCallback, useEffect, useEffectEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import RunStatusBadge from "@/components/run-status-badge";
 import { apiFetch } from "@/lib/api";
-import type { ListResponse, Run, Strategy } from "@/lib/types";
+import type { Dataset, ListResponse, Run, Strategy } from "@/lib/types";
 
 function formatDateTime(value?: string): string {
   return value ? new Date(value).toLocaleString() : "-";
@@ -40,6 +40,10 @@ export default function StrategyDetailPage({
   const [runs, setRuns] = useState<Run[]>([]);
   const [runsLoading, setRunsLoading] = useState(true);
   const [runsError, setRunsError] = useState("");
+  const [datasets, setDatasets] = useState<Dataset[]>([]);
+  const [selectedDatasetId, setSelectedDatasetId] = useState("");
+  const [datasetsLoading, setDatasetsLoading] = useState(true);
+  const [datasetsError, setDatasetsError] = useState("");
 
   const loadStrategy = useEffectEvent(async () => {
     setError("");
@@ -70,10 +74,32 @@ export default function StrategyDetailPage({
     }
   }, [id]);
 
+  const loadDatasets = useCallback(async () => {
+    setDatasetsLoading(true);
+    setDatasetsError("");
+
+    try {
+      const res = await apiFetch<ListResponse<Dataset>>("/api/v1/datasets?limit=100");
+      setDatasets(res.items);
+      setSelectedDatasetId((current) => {
+        if (current && res.items.some((dataset) => dataset.id === current)) return current;
+        const aaplDataset = res.items.find(
+          (dataset) => dataset.symbols.includes("AAPL") && dataset.timeframe === "1d"
+        );
+        return aaplDataset?.id ?? res.items[0]?.id ?? "";
+      });
+    } catch (err) {
+      setDatasetsError(err instanceof Error ? err.message : "Failed to load datasets");
+    } finally {
+      setDatasetsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     void loadStrategy();
     void loadRunHistory();
-  }, [id, loadRunHistory]);
+    void loadDatasets();
+  }, [id, loadRunHistory, loadDatasets]);
 
   async function handleSave() {
     setSaving(true);
@@ -97,7 +123,11 @@ export default function StrategyDetailPage({
     try {
       const run = await apiFetch<Run>("/api/v1/runs", {
         method: "POST",
-        body: JSON.stringify({ strategy_id: id, params: {} }),
+        body: JSON.stringify({
+          strategy_id: id,
+          dataset_id: selectedDatasetId || undefined,
+          params: {},
+        }),
       });
       router.push(`/runs/${run.id}`);
     } catch (err) {
@@ -165,6 +195,46 @@ export default function StrategyDetailPage({
 
         {error && <p className="text-sm text-red-400">{error}</p>}
 
+        <div className="rounded border border-zinc-800 bg-zinc-900 p-4">
+          <label className="block text-sm font-medium text-zinc-300">Dataset</label>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <select
+              value={selectedDatasetId}
+              onChange={(event) => setSelectedDatasetId(event.target.value)}
+              disabled={datasetsLoading || datasets.length === 0}
+              className="min-w-72 rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none disabled:opacity-50"
+            >
+              {datasets.length === 0 ? (
+                <option value="">Legacy sample fallback</option>
+              ) : (
+                datasets.map((dataset) => (
+                  <option key={dataset.id} value={dataset.id}>
+                    {dataset.name} - {dataset.symbols.join(", ")} - {dataset.timeframe}
+                  </option>
+                ))
+              )}
+            </select>
+            <button
+              onClick={() => void loadDatasets()}
+              type="button"
+              className="rounded border border-zinc-700 px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
+            >
+              Refresh
+            </button>
+          </div>
+          {datasetsError ? (
+            <p className="mt-2 text-sm text-red-400">{datasetsError}</p>
+          ) : (
+            <p className="mt-2 text-xs text-zinc-500">
+              {datasetsLoading
+                ? "Loading registered datasets..."
+                : selectedDatasetId
+                  ? "This run will use the selected registered dataset."
+                  : "No registered datasets were found; the worker will use the legacy sample fallback."}
+            </p>
+          )}
+        </div>
+
         <div className="flex gap-3">
           <button
             onClick={handleSave}
@@ -175,10 +245,10 @@ export default function StrategyDetailPage({
           </button>
           <button
             onClick={handleRun}
-            disabled={running}
+            disabled={running || datasetsLoading}
             className="rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-500 disabled:opacity-50"
           >
-            {running ? "Starting..." : "Run Backtest"}
+            {running ? "Starting..." : datasetsLoading ? "Loading datasets..." : "Run Backtest"}
           </button>
           <button
             onClick={handleDelete}

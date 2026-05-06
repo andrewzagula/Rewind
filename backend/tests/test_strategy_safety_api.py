@@ -130,11 +130,14 @@ async def test_create_run_enqueues_valid_strategy(
         assert current_strategy_id == strategy_id
         return SimpleNamespace(id=strategy_id, code=VALID_STRATEGY_CODE)
 
-    async def create_run(_db: object, data: object) -> SimpleNamespace:
+    async def create_run(_db: object, data: object, dataset: object | None = None) -> SimpleNamespace:
         assert data.strategy_id == strategy_id
+        assert dataset is None
         return SimpleNamespace(
             id=run_id,
             strategy_id=strategy_id,
+            dataset_id=data.dataset_id,
+            dataset_version="",
             params=data.params,
             metrics={},
             artifacts={},
@@ -159,5 +162,46 @@ async def test_create_run_enqueues_valid_strategy(
 
     assert response.status_code == 201
     assert response.json()["id"] == str(run_id)
+    assert response.json()["dataset_id"] is None
+    assert response.json()["dataset_version"] == ""
     assert pool.jobs == [("run_backtest", str(run_id))]
     assert pool.closed is True
+
+
+@pytest.mark.asyncio
+async def test_create_run_rejects_missing_dataset(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    strategy_id = uuid.uuid4()
+    dataset_id = uuid.uuid4()
+
+    async def get_strategy(_db: object, current_strategy_id: uuid.UUID) -> SimpleNamespace:
+        assert current_strategy_id == strategy_id
+        return SimpleNamespace(id=strategy_id, code=VALID_STRATEGY_CODE)
+
+    async def get_dataset(_db: object, current_dataset_id: uuid.UUID) -> None:
+        assert current_dataset_id == dataset_id
+        return None
+
+    async def fail_create_run(_db: object, _data: object, **_kwargs: object) -> None:
+        raise AssertionError("create_run should not be called")
+
+    async def fail_get_pool() -> None:
+        raise AssertionError("queue should not be opened")
+
+    monkeypatch.setattr(strategy_service, "get_strategy", get_strategy)
+    monkeypatch.setattr(runs_api.dataset_service, "get_dataset", get_dataset)
+    monkeypatch.setattr(run_service, "create_run", fail_create_run)
+    monkeypatch.setattr(runs_api, "_get_arq_pool", fail_get_pool)
+
+    response = await client.post(
+        "/api/v1/runs",
+        json={
+            "strategy_id": str(strategy_id),
+            "dataset_id": str(dataset_id),
+            "params": {},
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Dataset not found"

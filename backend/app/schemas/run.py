@@ -14,6 +14,8 @@ class RunCreate(BaseModel):
 class RunResponse(BaseModel):
     id: uuid.UUID
     strategy_id: uuid.UUID
+    dataset_id: uuid.UUID | None = None
+    dataset_version: str = ""
     params: dict
     metrics: dict
     artifacts: dict = {}

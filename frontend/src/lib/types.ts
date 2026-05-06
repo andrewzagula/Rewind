@@ -16,6 +16,8 @@ export interface ListResponse<T> {
 export interface Run {
   id: string;
   strategy_id: string;
+  dataset_id?: string | null;
+  dataset_version: string;
   params: Record<string, unknown>;
   metrics: RunMetrics;
   artifacts: Record<string, unknown>;
@@ -213,5 +215,7 @@ export interface Dataset {
   start_date: string;
   end_date: string;
   row_count: number;
+  file_path: string;
+  checksum: string;
   created_at: string;
 }

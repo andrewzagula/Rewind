@@ -64,3 +64,19 @@ def test_execute_backtest_with_timeout_terminates_long_running_strategy() -> Non
             data_dir=DATA_DIR,
             timeout_seconds=0.2,
         )
+
+
+def test_execute_backtest_with_timeout_uses_explicit_dataset_file_path() -> None:
+    result = execute_backtest_with_timeout(
+        strategy_code=VALID_STRATEGY_CODE,
+        params={"symbol": "MSFT"},
+        symbol="MSFT",
+        timeframe="1d",
+        initial_cash=100_000.0,
+        data_dir=DATA_DIR,
+        data_file_path=DATA_DIR / "MSFT_1d.parquet",
+        timeout_seconds=5,
+    )
+
+    assert result["metrics"]
+    assert result["trades"][0]["symbol"] == "MSFT"

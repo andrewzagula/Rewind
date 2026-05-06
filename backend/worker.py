@@ -12,9 +12,11 @@ from arq.connections import RedisSettings
 
 from app.core.config import settings
 from app.core.database import async_session
+from app.models.dataset import Dataset
 from app.models.run import Run
 from app.models.strategy import Strategy
 from app.models.trade import Trade
+from app.services.dataset_service import resolve_dataset_path
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +58,7 @@ def _execute_backtest_payload(
     timeframe: str,
     initial_cash: float,
     data_dir: str,
+    data_file_path: str,
 ) -> dict[str, Any]:
     _add_repo_roots_to_path()
 
@@ -65,7 +68,12 @@ def _execute_backtest_payload(
 
     strategy_cls = load_strategy_class(strategy_code)
     strategy_instance = strategy_cls()
-    bars = load_bars(symbol, timeframe, data_dir=Path(data_dir))
+    bars = load_bars(
+        symbol,
+        timeframe,
+        data_dir=Path(data_dir),
+        file_path=Path(data_file_path) if data_file_path else None,
+    )
     result = execute(
         strategy=strategy_instance,
         data=bars,
@@ -88,6 +96,7 @@ def _execute_backtest_child(
     timeframe: str,
     initial_cash: float,
     data_dir: str,
+    data_file_path: str,
 ) -> None:
     try:
         queue.put(
@@ -100,6 +109,7 @@ def _execute_backtest_child(
                     timeframe,
                     initial_cash,
                     data_dir,
+                    data_file_path,
                 ),
             }
         )
@@ -114,6 +124,7 @@ def execute_backtest_with_timeout(
     timeframe: str,
     initial_cash: float,
     data_dir: Path = DATA_DIR,
+    data_file_path: Path | None = None,
     timeout_seconds: float = BACKTEST_TIMEOUT_SECONDS,
 ) -> dict[str, Any]:
     queue: multiprocessing.Queue = multiprocessing.Queue(maxsize=1)
@@ -127,6 +138,7 @@ def execute_backtest_with_timeout(
             timeframe,
             initial_cash,
             str(data_dir),
+            str(data_file_path) if data_file_path is not None else "",
         ),
         daemon=True,
     )
@@ -182,14 +194,26 @@ async def run_backtest(ctx: dict, run_id: str) -> dict:
             if strategy_model is None:
                 raise ValueError(f"Strategy {run.strategy_id} not found")
 
+            dataset = None
+            data_file_path = None
+            if run.dataset_id is not None:
+                dataset = await db.get(Dataset, run.dataset_id)
+                if dataset is None:
+                    raise ValueError(f"Dataset {run.dataset_id} not found")
+                data_file_path = resolve_dataset_path(dataset.file_path)
+
             symbol = run.params.get("symbol", "AAPL")
             timeframe = run.params.get("timeframe", "1d")
+            if dataset is not None:
+                symbol = symbol or (dataset.symbols[0] if dataset.symbols else "")
+                timeframe = timeframe or dataset.timeframe
             result = execute_backtest_with_timeout(
                 strategy_code=strategy_model.code,
                 params=run.params,
                 symbol=symbol,
                 timeframe=timeframe,
                 initial_cash=run.params.get("initial_cash", 100_000.0),
+                data_file_path=data_file_path,
             )
 
             for t in result["trades"]:

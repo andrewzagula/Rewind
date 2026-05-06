@@ -17,7 +17,7 @@ import {
 import { InlineProgress, LoadingPanel, SkeletonBlock } from "@/components/progress";
 import RunStatusBadge from "@/components/run-status-badge";
 import { apiFetch } from "@/lib/api";
-import type { Run, Trade } from "@/lib/types";
+import type { Dataset, Run, Trade } from "@/lib/types";
 
 const TRADE_PAGE_SIZE = 25;
 const RUN_POLL_INTERVAL_MS = 3000;
@@ -77,6 +77,10 @@ function formatCurrency(value: unknown): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
+}
+
+function formatDate(value?: string): string {
+  return value ? new Date(value).toLocaleDateString() : "-";
 }
 
 function chatRunPath(runId: string, prompt: string): string {
@@ -169,6 +173,8 @@ export default function RunDetailPage({
   const [tradeSortBy, setTradeSortBy] = useState("timestamp");
   const [tradeSortDir, setTradeSortDir] = useState<"asc" | "desc">("asc");
   const [tradesLoading, setTradesLoading] = useState(false);
+  const [dataset, setDataset] = useState<Dataset | null>(null);
+  const [datasetError, setDatasetError] = useState("");
   const [isPolling, setIsPolling] = useState(false);
   const [lastRunRefreshAt, setLastRunRefreshAt] = useState<Date | null>(null);
   const [error, setError] = useState("");
@@ -223,6 +229,8 @@ export default function RunDetailPage({
     async function fetchRun() {
       setError("");
       setRun(null);
+      setDataset(null);
+      setDatasetError("");
       setTrades([]);
       setTradeTotal(0);
       setTradePage(0);
@@ -252,6 +260,27 @@ export default function RunDetailPage({
       intervalRef.current = null;
     };
   }, [id]);
+
+  useEffect(() => {
+    async function fetchDataset(datasetId: string) {
+      setDatasetError("");
+      try {
+        const currentDataset = await apiFetch<Dataset>(`/api/v1/datasets/${datasetId}`);
+        setDataset(currentDataset);
+      } catch (err) {
+        setDataset(null);
+        setDatasetError(err instanceof Error ? err.message : "Failed to load dataset");
+      }
+    }
+
+    if (!run?.dataset_id) {
+      setDataset(null);
+      setDatasetError("");
+      return;
+    }
+
+    void fetchDataset(run.dataset_id);
+  }, [run?.dataset_id]);
 
   useEffect(() => {
     if (run?.status === "completed") {
@@ -356,6 +385,34 @@ export default function RunDetailPage({
             <Fact label="Initial Cash" value={formatCurrency(run.params?.initial_cash ?? 100000)} />
             <Fact label="Status" value={run.status} />
             <Fact label="Strategy ID" value={run.strategy_id} wide />
+            {run.dataset_id ? (
+              <>
+                <Fact
+                  label="Dataset"
+                  value={dataset?.name ?? (datasetError || "Loading dataset...")}
+                  wide
+                />
+                {dataset ? (
+                  <>
+                    <Fact label="Dataset Symbols" value={dataset.symbols.join(", ")} />
+                    <Fact label="Dataset Timeframe" value={dataset.timeframe} />
+                    <Fact
+                      label="Dataset Dates"
+                      value={`${formatDate(dataset.start_date)} - ${formatDate(dataset.end_date)}`}
+                      wide
+                    />
+                    <Fact label="Dataset Rows" value={dataset.row_count.toLocaleString()} />
+                    <Fact
+                      label="Dataset Version"
+                      value={(run.dataset_version || dataset.checksum).slice(0, 12)}
+                    />
+                    <Fact label="Dataset File" value={dataset.file_path} wide />
+                  </>
+                ) : null}
+              </>
+            ) : (
+              <Fact label="Dataset" value="Legacy sample fallback" wide />
+            )}
             {run.error ? <Fact label="Error" value={run.error} wide /> : null}
           </div>
           <pre className="min-h-40 overflow-x-auto rounded border border-zinc-800 bg-zinc-950 p-4 text-xs text-zinc-300">
