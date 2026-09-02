@@ -44,6 +44,7 @@ export default function StrategyDetailPage({
   const [selectedDatasetId, setSelectedDatasetId] = useState("");
   const [datasetsLoading, setDatasetsLoading] = useState(true);
   const [datasetsError, setDatasetsError] = useState("");
+  const selectedDataset = datasets.find((dataset) => dataset.id === selectedDatasetId) ?? null;
 
   const loadStrategy = useEffectEvent(async () => {
     setError("");
@@ -83,10 +84,12 @@ export default function StrategyDetailPage({
       setDatasets(res.items);
       setSelectedDatasetId((current) => {
         if (current && res.items.some((dataset) => dataset.id === current)) return current;
-        const aaplDataset = res.items.find(
-          (dataset) => dataset.symbols.includes("AAPL") && dataset.timeframe === "1d"
-        );
-        return aaplDataset?.id ?? res.items[0]?.id ?? "";
+        const isReal = (dataset: Dataset) => dataset.source !== "synthetic";
+        const preferred =
+          res.items.find((dataset) => isReal(dataset) && dataset.symbols.includes("AAPL")) ??
+          res.items.find(isReal) ??
+          res.items.find((dataset) => dataset.symbols.includes("AAPL") && dataset.timeframe === "1d");
+        return preferred?.id ?? res.items[0]?.id ?? "";
       });
     } catch (err) {
       setDatasetsError(err instanceof Error ? err.message : "Failed to load datasets");
@@ -210,6 +213,7 @@ export default function StrategyDetailPage({
                 datasets.map((dataset) => (
                   <option key={dataset.id} value={dataset.id}>
                     {dataset.name} - {dataset.symbols.join(", ")} - {dataset.timeframe}
+                    {dataset.source === "synthetic" ? " (synthetic)" : ""}
                   </option>
                 ))
               )}
@@ -221,6 +225,9 @@ export default function StrategyDetailPage({
             >
               Refresh
             </button>
+            <Link href="/datasets" className="text-sm text-blue-300 hover:text-blue-200">
+              Add real market data
+            </Link>
           </div>
           {datasetsError ? (
             <p className="mt-2 text-sm text-red-400">{datasetsError}</p>
@@ -228,9 +235,11 @@ export default function StrategyDetailPage({
             <p className="mt-2 text-xs text-zinc-500">
               {datasetsLoading
                 ? "Loading registered datasets..."
-                : selectedDatasetId
-                  ? "This run will use the selected registered dataset."
-                  : "No registered datasets were found; the worker will use the legacy sample fallback."}
+                : selectedDataset?.source === "synthetic"
+                  ? "This dataset is randomly generated sample data. Results say nothing about the real market; fetch real data from the Datasets page."
+                  : selectedDatasetId
+                    ? "This run will use the selected registered dataset."
+                    : "No registered datasets were found; the worker will use the legacy sample fallback."}
             </p>
           )}
         </div>

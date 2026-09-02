@@ -31,6 +31,7 @@ out/
 Thumbs.db
 
 data/parquet/*.parquet
+data/market/
 !data/sample/
 
 *.log

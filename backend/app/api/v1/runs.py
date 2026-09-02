@@ -1,12 +1,10 @@
 import uuid
 
-from arq.connections import ArqRedis, RedisSettings, create_pool
 from fastapi import APIRouter, HTTPException
 
-from app.core.config import settings
 from app.core.deps import DbSession
 from app.schemas.run import RunCreate, RunResponse, TradeResponse
-from app.services import dataset_service, run_service, strategy_service
+from app.services import dataset_service, job_service, run_service, strategy_service
 from app.services.strategy_validation_service import (
     StrategyCodeValidationError,
     validate_strategy_code_for_api,
@@ -15,8 +13,7 @@ from app.services.strategy_validation_service import (
 router = APIRouter(prefix="/runs", tags=["runs"])
 
 
-async def _get_arq_pool() -> ArqRedis:
-    return await create_pool(RedisSettings.from_dsn(settings.redis_url))
+_get_arq_pool = job_service.get_arq_pool
 
 
 @router.post("", response_model=RunResponse, status_code=201)

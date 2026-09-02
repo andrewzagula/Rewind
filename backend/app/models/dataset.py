@@ -18,4 +18,5 @@ class Dataset(Base):
     row_count: Mapped[int] = mapped_column(BigInteger, default=0)
     file_path: Mapped[str] = mapped_column(Text)
     checksum: Mapped[str] = mapped_column(String(64), default="")
+    source: Mapped[str] = mapped_column(String(32), default="", server_default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

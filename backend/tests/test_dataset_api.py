@@ -80,3 +80,55 @@ async def test_get_dataset_returns_404_for_missing_dataset(
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Dataset not found"
+
+
+@pytest.mark.asyncio
+async def test_fetch_dataset_registers_real_data(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.services import market_data_service
+
+    dataset = _dataset()
+    dataset.name = "NVDA Daily"
+    dataset.symbols = ["NVDA"]
+    dataset.source = "stooq"
+    captured: dict = {}
+
+    async def fetch_and_register(_db, symbol, start_date=None, end_date=None, client=None):
+        captured.update(symbol=symbol, start_date=start_date, end_date=end_date)
+        return dataset
+
+    monkeypatch.setattr(market_data_service, "fetch_and_register", fetch_and_register)
+
+    response = await client.post(
+        "/api/v1/datasets/fetch", json={"symbol": "nvda", "start_date": "2020-01-01"}
+    )
+
+    assert response.status_code == 201
+    assert captured == {"symbol": "nvda", "start_date": date(2020, 1, 1), "end_date": None}
+    body = response.json()
+    assert body["symbols"] == ["NVDA"]
+    assert body["source"] == "stooq"
+
+
+@pytest.mark.asyncio
+async def test_fetch_dataset_maps_validation_and_provider_errors(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.services import market_data_service
+
+    async def bad_symbol(_db, symbol, start_date=None, end_date=None, client=None):
+        raise market_data_service.MarketDataValidationError("Symbol must be valid")
+
+    monkeypatch.setattr(market_data_service, "fetch_and_register", bad_symbol)
+    response = await client.post("/api/v1/datasets/fetch", json={"symbol": "???"})
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Symbol must be valid"
+
+    async def provider_down(_db, symbol, start_date=None, end_date=None, client=None):
+        raise market_data_service.MarketDataError("Unable to fetch daily bars for ZZZZ.")
+
+    monkeypatch.setattr(market_data_service, "fetch_and_register", provider_down)
+    response = await client.post("/api/v1/datasets/fetch", json={"symbol": "ZZZZ"})
+    assert response.status_code == 502
+    assert "Unable to fetch" in response.json()["detail"]

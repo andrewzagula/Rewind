@@ -5,7 +5,8 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 ChatRole = Literal["user", "assistant", "system"]
-ChatStreamEventType = Literal["session", "chunk", "done", "error"]
+ChatStreamEventType = Literal["session", "chunk", "tool_call", "tool_result", "done", "error"]
+ChatToolStatus = Literal["running", "completed", "failed"]
 ChatActionAuditStatus = Literal["completed", "failed", "cancelled"]
 
 
@@ -65,9 +66,21 @@ class ChatSessionResponse(ChatSessionSummary):
     messages: list[ChatMessageResponse] = Field(default_factory=list)
 
 
+class ChatToolActivity(BaseModel):
+    id: str
+    name: str
+    arguments: dict[str, Any] = Field(default_factory=dict)
+    status: ChatToolStatus = "running"
+    summary: str = ""
+    href: str = ""
+    started_at: str = ""
+    completed_at: str = ""
+
+
 class ChatStreamEvent(BaseModel):
     type: ChatStreamEventType
     session: ChatSessionSummary | None = None
     message: ChatMessageResponse | None = None
+    tool: ChatToolActivity | None = None
     content: str = ""
     error: str = ""

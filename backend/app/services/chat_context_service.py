@@ -157,6 +157,14 @@ async def _build_compare_context(db: AsyncSession, run_ids: list[uuid.UUID]) -> 
     }
 
 
+def run_payload(run: Run) -> dict[str, Any]:
+    return _run_payload(run)
+
+
+def strategy_payload(strategy: Strategy | None) -> dict[str, Any] | None:
+    return _strategy_payload(strategy)
+
+
 def _parse_uuid(value: Any, field: str) -> uuid.UUID:
     if not isinstance(value, str):
         raise ChatContextValidationError(f"{field} must be a UUID string")
