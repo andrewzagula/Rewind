@@ -67,5 +67,6 @@ class TradeResponse(BaseModel):
     price: Decimal
     timestamp: datetime
     pnl: Decimal
+    fees: Decimal = Decimal(0)
 
     model_config = {"from_attributes": True}

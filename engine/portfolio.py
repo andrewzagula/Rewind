@@ -24,20 +24,31 @@ class Portfolio:
             self.positions[symbol] = Position(symbol=symbol)
         return self.positions[symbol]
 
-    def update_position(self, symbol: str, quantity: float, price: float) -> float:
+    def held_quantity(self, symbol: str) -> float:
+        position = self.positions.get(symbol)
+        return position.quantity if position is not None else 0.0
+
+    def update_position(
+        self, symbol: str, quantity: float, price: float, fees: float = 0.0
+    ) -> float:
+        """Apply a fill. Positive quantity buys, negative sells.
+
+        Buy fees are added to the position's cost basis; sell fees reduce the realized
+        profit. Returns realized profit and loss (zero for buys).
+        """
         pos = self.get_position(symbol)
         pnl = 0.0
 
         if quantity > 0:
-            total_cost = pos.avg_price * pos.quantity + price * quantity
+            total_cost = pos.avg_price * pos.quantity + price * quantity + fees
             pos.quantity += quantity
             pos.avg_price = total_cost / pos.quantity if pos.quantity else 0
-            self.cash -= price * quantity
+            self.cash -= price * quantity + fees
         else:
             sell_qty = abs(quantity)
-            pnl = (price - pos.avg_price) * sell_qty
+            pnl = (price - pos.avg_price) * sell_qty - fees
             pos.quantity -= sell_qty
-            self.cash += price * sell_qty
+            self.cash += price * sell_qty - fees
             if pos.quantity == 0:
                 pos.avg_price = 0.0
 

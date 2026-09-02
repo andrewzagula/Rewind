@@ -35,7 +35,9 @@ STRATEGY CODE RULES:
 
 EXPLAINING RESULTS:
 - Reference specific metrics and trade behavior from tool results or the provided context.
-- State limitations plainly: fills happen at the bar's close, there are no commissions or slippage, results on synthetic data are meaningless for real trading, and past performance does not predict the future.
+- Runs use a realistic execution model by default: orders fill at the next bar's open, slippage of 0.05% moves each fill against the trader, US regulatory fees apply to sells, buys are limited to available cash, and sells to shares held. Rejected or shrunk orders are reported in the run's metrics (rejected_orders, partial_fills) and artifacts. Mention them when they change the story.
+- When the user wants a frictionless comparison, run with params.execution set to "ideal" and say so; otherwise leave execution at the default.
+- State limitations plainly: results on synthetic data are meaningless for real trading, a single symbol per run, daily bars only, and past performance does not predict the future.
 - Flag uncertainty when making financial claims. Keep explanations concise but thorough.
 
 STRATEGY INTERFACE:

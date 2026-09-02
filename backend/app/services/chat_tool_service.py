@@ -196,7 +196,12 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                     "params": {
                         "type": "object",
                         "description": (
-                            "Strategy params such as symbol, timeframe, initial_cash, window"
+                            "Strategy params such as symbol, timeframe, initial_cash, window. "
+                            "Optional params.execution controls realism: omit for the realistic "
+                            "default (next-open fills, 0.05% slippage, regulatory sell fees, "
+                            "cash and position checks), pass \"ideal\" for frictionless "
+                            "close fills, or an object like {\"slippage_pct\": 0.001, "
+                            "\"commission_per_share\": 0.005, \"allow_short\": true}."
                         ),
                     },
                 },

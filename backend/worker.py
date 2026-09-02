@@ -85,6 +85,8 @@ def _execute_backtest_payload(
         "equity_curve": result.equity_curve,
         "equity_points": result.equity_points,
         "trades": result.trades,
+        "rejected_orders": result.rejected_orders,
+        "execution": result.execution,
     }
 
 
@@ -178,6 +180,26 @@ def execute_backtest_with_timeout(
     return payload["result"]
 
 
+def _trade_metadata(trade: dict[str, Any]) -> dict[str, Any]:
+    """Execution details worth keeping per trade, in JSON-safe form."""
+    keys = (
+        "requested_quantity",
+        "reference_price",
+        "signal_timestamp",
+        "commission",
+        "regulatory_fees",
+        "slippage",
+        "reason",
+    )
+    metadata: dict[str, Any] = {}
+    for key in keys:
+        value = trade.get(key)
+        if value is None or value == "":
+            continue
+        metadata[key] = value.isoformat() if hasattr(value, "isoformat") else value
+    return metadata
+
+
 async def run_backtest(ctx: dict, run_id: str) -> dict:
     async with async_session() as db:
         run = await db.get(Run, uuid.UUID(run_id))
@@ -225,6 +247,8 @@ async def run_backtest(ctx: dict, run_id: str) -> dict:
                     price=t["price"],
                     timestamp=t.get("timestamp", datetime.now(UTC)),
                     pnl=t.get("pnl", 0),
+                    fees=t.get("fees", 0),
+                    metadata_=_trade_metadata(t),
                 )
                 db.add(trade)
 
@@ -233,6 +257,8 @@ async def run_backtest(ctx: dict, run_id: str) -> dict:
             run.artifacts = {
                 "equity_curve": result["equity_curve"],
                 "equity_points": result["equity_points"],
+                "execution": result.get("execution", {}),
+                "rejected_orders": result.get("rejected_orders", []),
             }
             run.completed_at = datetime.now(UTC)
             await db.commit()
