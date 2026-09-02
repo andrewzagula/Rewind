@@ -53,6 +53,10 @@ The `portfolio` object exposes:
 
 - `portfolio.position_symbols` for symbols with non-zero positions.
 - `portfolio.get_position(symbol)` to inspect the current position.
+- `portfolio.held_quantity(symbol)` for the number of shares held (0 when flat).
+- `portfolio.cash` for the cash available after fees.
+
+Signals are orders, not guaranteed fills. With the default realistic execution model, a signal returned while looking at one bar fills at the next bar's open with slippage; a buy the account cannot afford is shrunk to what cash allows; a sell larger than the position is clamped; and a sell with no position is rejected. Rejected orders appear on the run page with a reason. Size orders from `portfolio.cash` and `row["close"]` if you want to avoid partial fills, and set `params["execution"] = "ideal"` to test with frictionless close fills instead.
 
 Example:
 

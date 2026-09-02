@@ -1,4 +1,7 @@
+import sys
 import uuid
+from pathlib import Path
+from types import ModuleType
 
 from sqlalchemy import asc, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,8 +16,34 @@ class DatasetRunValidationError(Exception):
     pass
 
 
+def _engine_execution_module() -> ModuleType:
+    """Import engine.execution, adding the repo root to sys.path when running outside Docker."""
+    try:
+        from engine import execution
+    except ModuleNotFoundError:
+        current = Path(__file__).resolve()
+        candidates = [Path.cwd(), Path.cwd().parent, current.parents[3]]
+        if len(current.parents) > 4:
+            candidates.append(current.parents[4])
+        for candidate in candidates:
+            if (candidate / "engine" / "execution.py").exists() and str(candidate) not in sys.path:
+                sys.path.insert(0, str(candidate))
+        from engine import execution
+    return execution
+
+
+def normalize_execution_params(params: dict) -> dict:
+    """Expand params["execution"] to the full settings the run will actually use."""
+    execution = _engine_execution_module()
+    try:
+        params["execution"] = execution.ExecutionConfig.from_params(params).as_dict()
+    except execution.ExecutionConfigError as exc:
+        raise DatasetRunValidationError(str(exc)) from exc
+    return params
+
+
 def build_dataset_run_params(data: RunCreate, dataset: Dataset | None) -> dict:
-    params = dict(data.params or {})
+    params = normalize_execution_params(dict(data.params or {}))
     if dataset is None:
         return params
 
@@ -26,9 +55,7 @@ def build_dataset_run_params(data: RunCreate, dataset: Dataset | None) -> dict:
     requested_timeframe = params.get("timeframe")
 
     if requested_symbol is not None and requested_symbol not in dataset.symbols:
-        raise DatasetRunValidationError(
-            f"Dataset does not contain symbol {requested_symbol!s}"
-        )
+        raise DatasetRunValidationError(f"Dataset does not contain symbol {requested_symbol!s}")
     if requested_timeframe is not None and requested_timeframe != dataset.timeframe:
         raise DatasetRunValidationError(
             f"Dataset timeframe is {dataset.timeframe}, not {requested_timeframe!s}"
@@ -74,9 +101,7 @@ async def list_runs(
         base = base.where(Run.strategy_id == strategy_id)
         count_q = count_q.where(Run.strategy_id == strategy_id)
     total = await db.scalar(count_q)
-    result = await db.execute(
-        base.order_by(Run.created_at.desc()).limit(limit).offset(offset)
-    )
+    result = await db.execute(base.order_by(Run.created_at.desc()).limit(limit).offset(offset))
     return list(result.scalars().all()), total or 0
 
 
@@ -97,6 +122,7 @@ async def get_run_trades(
         "quantity": Trade.quantity,
         "price": Trade.price,
         "pnl": Trade.pnl,
+        "fees": Trade.fees,
     }
     sort_column = sort_columns.get(sort_by, Trade.timestamp)
     ordering = desc(sort_column) if sort_dir == "desc" else asc(sort_column)

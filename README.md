@@ -86,6 +86,32 @@ Three ways to add data:
 - Chat: ask for a backtest on a symbol; the assistant fetches data when no real dataset exists.
 - Script: `docker compose exec backend python scripts/fetch_market_data.py NVDA --start 2015-01-01`
 
+## Execution Model
+
+Every run simulates how orders would actually fill and what they would cost. The default is a conservative US retail account trading liquid stocks:
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `fill_mode` | `next_open` | A signal seen on one day's bar fills at the next day's open, not that day's close |
+| `slippage_pct` | `0.0005` | Every fill moves 0.05% against you |
+| `commission_per_trade`, `commission_per_share`, `commission_min` | `0` | Broker commission; most US brokers charge nothing for stocks |
+| `sec_fee_rate` | `0.0000278` | SEC fee on sells, $27.80 per $1M sold |
+| `finra_taf_per_share`, `finra_taf_max` | `0.000166`, `8.30` | FINRA trading activity fee on sells, capped per trade |
+| `enforce_cash` | `true` | Buys cannot spend more cash than the account holds |
+| `allow_partial_fills` | `true` | An unaffordable buy is shrunk to what cash allows; an oversized sell is clamped to shares held |
+| `allow_short` | `false` | Selling shares you do not hold is rejected |
+
+Buy fees are added to the position's cost basis; sell fees reduce realized profit. Each completed run reports `total_fees`, `total_slippage_cost`, `partial_fills`, and `rejected_orders` in its metrics, lists every rejected order with a reason in its artifacts, and stores per-trade fees.
+
+Set the model per run through `params.execution`:
+
+```json
+{ "execution": "ideal" }
+{ "execution": { "slippage_pct": 0.001, "commission_per_share": 0.005, "commission_min": 1 } }
+```
+
+The `ideal` preset reproduces frictionless close fills with no costs or checks, useful as an upper bound next to the realistic run on the compare page. The strategy page exposes these settings as Realistic, Ideal, and Custom.
+
 ## Configuration
 
 Copy `.env.example` to `.env` before starting the Docker stack:

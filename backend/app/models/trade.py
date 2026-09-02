@@ -19,4 +19,5 @@ class Trade(Base):
     price: Mapped[Decimal] = mapped_column(Numeric)
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     pnl: Mapped[Decimal] = mapped_column(Numeric, default=0)
+    fees: Mapped[Decimal] = mapped_column(Numeric, default=0, server_default="0")
     metadata_: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)

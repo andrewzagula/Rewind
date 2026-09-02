@@ -17,7 +17,7 @@ import {
 import { InlineProgress, LoadingPanel, SkeletonBlock } from "@/components/progress";
 import RunStatusBadge from "@/components/run-status-badge";
 import { apiFetch } from "@/lib/api";
-import type { Dataset, Run, Trade } from "@/lib/types";
+import type { Dataset, ExecutionSettings, RejectedOrder, Run, Trade } from "@/lib/types";
 
 const TRADE_PAGE_SIZE = 25;
 const RUN_POLL_INTERVAL_MS = 3000;
@@ -36,6 +36,10 @@ const metricLabels: [string, string, (v: number) => string][] = [
   ["avg_trade_pnl", "Avg Trade PnL", (v) => `$${v.toFixed(2)}`],
   ["avg_win", "Avg Win", (v) => `$${v.toFixed(2)}`],
   ["avg_loss", "Avg Loss", (v) => `$${v.toFixed(2)}`],
+  ["total_fees", "Total Fees", (v) => `$${v.toFixed(2)}`],
+  ["total_slippage_cost", "Slippage Cost", (v) => `$${v.toFixed(2)}`],
+  ["partial_fills", "Partial Fills", (v) => v.toString()],
+  ["rejected_orders", "Rejected Orders", (v) => v.toString()],
 ];
 
 const tradeSortOptions = [
@@ -45,6 +49,7 @@ const tradeSortOptions = [
   { value: "quantity", label: "Qty" },
   { value: "price", label: "Price" },
   { value: "pnl", label: "PnL" },
+  { value: "fees", label: "Fees" },
 ];
 
 type EquityPoint = {
@@ -98,6 +103,76 @@ function isActiveRun(run: Run): boolean {
 
 function formatRefreshTime(value: Date | null): string {
   return value ? value.toLocaleTimeString() : "waiting for first refresh";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function getExecution(run: Run): ExecutionSettings | null {
+  const fromParams = run.params?.execution;
+  if (isRecord(fromParams)) return fromParams as ExecutionSettings;
+  if (fromParams === "ideal" || fromParams === "realistic") return { preset: fromParams };
+  const fromArtifacts = run.artifacts?.execution;
+  if (isRecord(fromArtifacts)) return fromArtifacts as ExecutionSettings;
+  return null;
+}
+
+function getRejectedOrders(run: Run): RejectedOrder[] {
+  const raw = run.artifacts?.rejected_orders;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(
+    (item): item is RejectedOrder =>
+      isRecord(item) && typeof item.reason === "string" && typeof item.symbol === "string"
+  );
+}
+
+function describeExecution(execution: ExecutionSettings): { label: string; value: string }[] {
+  const facts: { label: string; value: string }[] = [];
+  const preset = execution.preset ?? "realistic";
+  facts.push({ label: "Execution", value: preset.charAt(0).toUpperCase() + preset.slice(1) });
+  if (execution.fill_mode) {
+    facts.push({
+      label: "Fill Price",
+      value: execution.fill_mode === "close" ? "Same day's close" : "Next day's open",
+    });
+  }
+  if (typeof execution.slippage_pct === "number") {
+    facts.push({ label: "Slippage", value: `${(execution.slippage_pct * 100).toFixed(3)}% per fill` });
+  }
+  if (
+    typeof execution.commission_per_trade === "number" ||
+    typeof execution.commission_per_share === "number"
+  ) {
+    const perTrade = execution.commission_per_trade ?? 0;
+    const perShare = execution.commission_per_share ?? 0;
+    const minimum = execution.commission_min ?? 0;
+    const parts: string[] = [];
+    if (perTrade > 0) parts.push(`$${perTrade.toFixed(2)} per trade`);
+    if (perShare > 0) parts.push(`$${perShare.toFixed(4)} per share`);
+    if (minimum > 0) parts.push(`$${minimum.toFixed(2)} minimum`);
+    facts.push({ label: "Commission", value: parts.length ? parts.join(", ") : "None" });
+  }
+  if (typeof execution.sec_fee_rate === "number") {
+    facts.push({
+      label: "Regulatory Fees",
+      value: execution.sec_fee_rate > 0 ? "SEC and FINRA fees on sells" : "None",
+    });
+  }
+  if (typeof execution.enforce_cash === "boolean") {
+    facts.push({
+      label: "Cash Check",
+      value: execution.enforce_cash
+        ? execution.allow_partial_fills === false
+          ? "Reject unaffordable buys"
+          : "Shrink unaffordable buys"
+        : "Off",
+    });
+  }
+  if (typeof execution.allow_short === "boolean") {
+    facts.push({ label: "Short Selling", value: execution.allow_short ? "Allowed" : "Not allowed" });
+  }
+  return facts;
 }
 
 function getEquityPoints(run: Run): EquityPoint[] {
@@ -308,6 +383,8 @@ export default function RunDetailPage({
   const tradeMarkers = getTradeMarkers(chartData, trades);
   const metrics = run.metrics as unknown as Record<string, number>;
   const hasMetrics = run.status === "completed" && Object.keys(run.metrics ?? {}).length > 0;
+  const execution = getExecution(run);
+  const rejectedOrders = getRejectedOrders(run);
   const totalTradePages = Math.max(1, Math.ceil(tradeTotal / TRADE_PAGE_SIZE));
   const activeRun = isActiveRun(run);
 
@@ -414,6 +491,11 @@ export default function RunDetailPage({
               <Fact label="Dataset" value="Legacy sample fallback" wide />
             )}
             {run.error ? <Fact label="Error" value={run.error} wide /> : null}
+            {execution
+              ? describeExecution(execution).map((fact) => (
+                  <Fact key={fact.label} label={fact.label} value={fact.value} />
+                ))
+              : null}
           </div>
           <pre className="min-h-40 overflow-x-auto rounded border border-zinc-800 bg-zinc-950 p-4 text-xs text-zinc-300">
             {JSON.stringify(run.params ?? {}, null, 2)}
@@ -538,6 +620,45 @@ export default function RunDetailPage({
         />
       ) : null}
 
+      {run.status === "completed" && rejectedOrders.length > 0 ? (
+        <section className="mt-8">
+          <h2 className="text-lg font-semibold">Rejected Orders ({rejectedOrders.length})</h2>
+          <p className="mt-1 text-sm text-zinc-500">
+            Signals the execution model could not fill. Buys the account could not afford, sells
+            without a position, and signals on the final bar land here.
+          </p>
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[640px] text-left text-sm">
+              <thead className="border-b border-zinc-800 text-zinc-400">
+                <tr>
+                  <th className="pb-3 font-medium">Signal Time</th>
+                  <th className="pb-3 font-medium">Symbol</th>
+                  <th className="pb-3 font-medium">Side</th>
+                  <th className="pb-3 font-medium">Qty</th>
+                  <th className="pb-3 font-medium">Reason</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800">
+                {rejectedOrders.slice(0, 50).map((order, index) => (
+                  <tr key={`${order.timestamp}-${index}`} className="hover:bg-zinc-900">
+                    <td className="py-2 text-zinc-400">{order.timestamp || "-"}</td>
+                    <td className="py-2 text-zinc-100">{order.symbol}</td>
+                    <td className={`py-2 ${order.side === "buy" ? "text-green-400" : "text-red-400"}`}>
+                      {order.side}
+                    </td>
+                    <td className="py-2 text-zinc-300">{Number(order.quantity).toLocaleString()}</td>
+                    <td className="py-2 text-zinc-300">{order.reason}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {rejectedOrders.length > 50 ? (
+              <p className="mt-2 text-xs text-zinc-500">Showing the first 50 rejected orders.</p>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
       {run.status === "completed" ? (
         <section className="mt-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -580,6 +701,7 @@ export default function RunDetailPage({
                       <th className="pb-3 font-medium">Qty</th>
                       <th className="pb-3 font-medium">Price</th>
                       <th className="pb-3 font-medium">PnL</th>
+                      <th className="pb-3 font-medium">Fees</th>
                       <th className="pb-3 font-medium">Time</th>
                     </tr>
                   </thead>
@@ -595,6 +717,7 @@ export default function RunDetailPage({
                         <td className={`py-2 ${Number(trade.pnl) >= 0 ? "text-green-400" : "text-red-400"}`}>
                           {formatCurrency(trade.pnl)}
                         </td>
+                        <td className="py-2 text-zinc-300">{formatCurrency(trade.fees ?? 0)}</td>
                         <td className="py-2 text-zinc-400">
                           {new Date(trade.timestamp).toLocaleString()}
                         </td>

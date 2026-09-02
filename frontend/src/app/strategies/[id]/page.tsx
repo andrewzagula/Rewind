@@ -5,7 +5,83 @@ import { use, useCallback, useEffect, useEffectEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import RunStatusBadge from "@/components/run-status-badge";
 import { apiFetch } from "@/lib/api";
-import type { Dataset, ListResponse, Run, Strategy } from "@/lib/types";
+import type {
+  Dataset,
+  ExecutionPreset,
+  ExecutionSettings,
+  FillMode,
+  ListResponse,
+  Run,
+  Strategy,
+} from "@/lib/types";
+
+const EXECUTION_PRESETS: { value: ExecutionPreset; label: string; description: string }[] = [
+  {
+    value: "realistic",
+    label: "Realistic",
+    description:
+      "Fills at the next day's open, 0.05% slippage, US regulatory fees on sells, buys limited to cash, no shorting.",
+  },
+  {
+    value: "ideal",
+    label: "Ideal",
+    description:
+      "Frictionless upper bound: fills at the close, no slippage or fees, no cash or position checks.",
+  },
+  {
+    value: "custom",
+    label: "Custom",
+    description: "Start from the realistic model and change the knobs below.",
+  },
+];
+
+interface CustomExecutionForm {
+  fillMode: FillMode;
+  slippagePercent: string;
+  commissionPerTrade: string;
+  commissionPerShare: string;
+  commissionMin: string;
+  enforceCash: boolean;
+  allowPartialFills: boolean;
+  allowShort: boolean;
+}
+
+const DEFAULT_CUSTOM_FORM: CustomExecutionForm = {
+  fillMode: "next_open",
+  slippagePercent: "0.05",
+  commissionPerTrade: "0",
+  commissionPerShare: "0",
+  commissionMin: "0",
+  enforceCash: true,
+  allowPartialFills: true,
+  allowShort: false,
+};
+
+function parseNumber(value: string, label: string): number {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0) {
+    throw new Error(`${label} must be a number of zero or more.`);
+  }
+  return number;
+}
+
+function buildExecutionParam(
+  preset: ExecutionPreset,
+  form: CustomExecutionForm
+): ExecutionPreset | ExecutionSettings {
+  if (preset !== "custom") return preset;
+  return {
+    preset: "realistic",
+    fill_mode: form.fillMode,
+    slippage_pct: parseNumber(form.slippagePercent, "Slippage") / 100,
+    commission_per_trade: parseNumber(form.commissionPerTrade, "Commission per trade"),
+    commission_per_share: parseNumber(form.commissionPerShare, "Commission per share"),
+    commission_min: parseNumber(form.commissionMin, "Minimum commission"),
+    enforce_cash: form.enforceCash,
+    allow_partial_fills: form.allowPartialFills,
+    allow_short: form.allowShort,
+  };
+}
 
 function formatDateTime(value?: string): string {
   return value ? new Date(value).toLocaleString() : "-";
@@ -45,6 +121,9 @@ export default function StrategyDetailPage({
   const [datasetsLoading, setDatasetsLoading] = useState(true);
   const [datasetsError, setDatasetsError] = useState("");
   const selectedDataset = datasets.find((dataset) => dataset.id === selectedDatasetId) ?? null;
+  const [executionPreset, setExecutionPreset] = useState<ExecutionPreset>("realistic");
+  const [customExecution, setCustomExecution] = useState<CustomExecutionForm>(DEFAULT_CUSTOM_FORM);
+  const activePreset = EXECUTION_PRESETS.find((item) => item.value === executionPreset)!;
 
   const loadStrategy = useEffectEvent(async () => {
     setError("");
@@ -124,12 +203,13 @@ export default function StrategyDetailPage({
     setRunning(true);
     setError("");
     try {
+      const execution = buildExecutionParam(executionPreset, customExecution);
       const run = await apiFetch<Run>("/api/v1/runs", {
         method: "POST",
         body: JSON.stringify({
           strategy_id: id,
           dataset_id: selectedDatasetId || undefined,
-          params: {},
+          params: { execution },
         }),
       });
       router.push(`/runs/${run.id}`);
@@ -244,6 +324,87 @@ export default function StrategyDetailPage({
           )}
         </div>
 
+        <div className="rounded border border-zinc-800 bg-zinc-900 p-4">
+          <label className="block text-sm font-medium text-zinc-300">Execution model</label>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {EXECUTION_PRESETS.map((preset) => (
+              <button
+                key={preset.value}
+                type="button"
+                onClick={() => setExecutionPreset(preset.value)}
+                className={`rounded border px-3 py-1.5 text-sm ${
+                  executionPreset === preset.value
+                    ? "border-blue-500 bg-blue-950/40 text-blue-200"
+                    : "border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                }`}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-zinc-500">{activePreset.description}</p>
+          {executionPreset === "custom" ? (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <label className="block text-xs text-zinc-400">
+                Fill price
+                <select
+                  value={customExecution.fillMode}
+                  onChange={(event) =>
+                    setCustomExecution({ ...customExecution, fillMode: event.target.value as FillMode })
+                  }
+                  className="mt-1 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
+                >
+                  <option value="next_open">Next day&apos;s open</option>
+                  <option value="close">Same day&apos;s close</option>
+                </select>
+              </label>
+              <NumberField
+                label="Slippage per fill (%)"
+                value={customExecution.slippagePercent}
+                onChange={(value) => setCustomExecution({ ...customExecution, slippagePercent: value })}
+              />
+              <NumberField
+                label="Commission per trade ($)"
+                value={customExecution.commissionPerTrade}
+                onChange={(value) => setCustomExecution({ ...customExecution, commissionPerTrade: value })}
+              />
+              <NumberField
+                label="Commission per share ($)"
+                value={customExecution.commissionPerShare}
+                onChange={(value) => setCustomExecution({ ...customExecution, commissionPerShare: value })}
+              />
+              <NumberField
+                label="Minimum commission ($)"
+                value={customExecution.commissionMin}
+                onChange={(value) => setCustomExecution({ ...customExecution, commissionMin: value })}
+              />
+              <div className="flex flex-col gap-2 text-xs text-zinc-300">
+                <CheckboxField
+                  label="Limit buys to available cash"
+                  checked={customExecution.enforceCash}
+                  onChange={(checked) => setCustomExecution({ ...customExecution, enforceCash: checked })}
+                />
+                <CheckboxField
+                  label="Shrink oversized orders instead of rejecting"
+                  checked={customExecution.allowPartialFills}
+                  onChange={(checked) =>
+                    setCustomExecution({ ...customExecution, allowPartialFills: checked })
+                  }
+                />
+                <CheckboxField
+                  label="Allow short selling"
+                  checked={customExecution.allowShort}
+                  onChange={(checked) => setCustomExecution({ ...customExecution, allowShort: checked })}
+                />
+              </div>
+              <p className="text-xs text-zinc-500 sm:col-span-2 lg:col-span-3">
+                SEC and FINRA fees on sells stay at their statutory defaults. Edit the run params
+                through the API to change them.
+              </p>
+            </div>
+          ) : null}
+        </div>
+
         <div className="flex gap-3">
           <button
             onClick={handleSave}
@@ -333,5 +494,51 @@ export default function StrategyDetailPage({
         ) : null}
       </section>
     </div>
+  );
+}
+
+function NumberField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block text-xs text-zinc-400">
+      {label}
+      <input
+        type="number"
+        min="0"
+        step="any"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-1 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
+      />
+    </label>
+  );
+}
+
+function CheckboxField({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="inline-flex items-center gap-2">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+        className="h-4 w-4 rounded border-zinc-700 bg-zinc-950"
+      />
+      {label}
+    </label>
   );
 }

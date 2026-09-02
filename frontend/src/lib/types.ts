@@ -42,6 +42,37 @@ export interface RunMetrics {
   avg_trade_pnl: number;
   avg_win: number;
   avg_loss: number;
+  total_fees?: number;
+  total_slippage_cost?: number;
+  partial_fills?: number;
+  rejected_orders?: number;
+}
+
+export type ExecutionPreset = "realistic" | "ideal" | "custom";
+export type FillMode = "next_open" | "close";
+
+export interface ExecutionSettings {
+  preset?: ExecutionPreset;
+  fill_mode?: FillMode;
+  slippage_pct?: number;
+  commission_per_trade?: number;
+  commission_per_share?: number;
+  commission_min?: number;
+  sec_fee_rate?: number;
+  finra_taf_per_share?: number;
+  finra_taf_max?: number;
+  enforce_cash?: boolean;
+  allow_partial_fills?: boolean;
+  allow_short?: boolean;
+}
+
+export interface RejectedOrder {
+  symbol: string;
+  side: "buy" | "sell";
+  quantity: number;
+  timestamp: string;
+  reason: string;
+  strategy_reason?: string;
 }
 
 export interface CompareEquityPoint {
@@ -83,6 +114,7 @@ export interface Trade {
   price: number;
   timestamp: string;
   pnl: number;
+  fees: number;
 }
 
 export type ChatRole = "user" | "assistant" | "system";
