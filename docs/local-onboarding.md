@@ -19,15 +19,17 @@ Default endpoints:
 
 If you want chat responses from OpenAI, set `OPENAI_API_KEY` in `.env` before starting the stack. The core strategy and backtest workflow works without it.
 
-## 2. Seed Sample Data
+## 2. Fetch Real Market Data
 
-The worker reads local Parquet files from `data/sample`. The repository usually includes sample files for `AAPL`, `SPY`, `TSLA`, `MSFT`, and `GOOG`. Database migrations register those sample files as selectable datasets. Regenerate the Parquet files with:
+The worker reads local Parquet files. Fetch real daily history for the starter tickers from free providers (no API key):
 
 ```bash
-docker compose exec backend python scripts/seed_data.py
+docker compose exec backend python scripts/fetch_market_data.py AAPL SPY TSLA MSFT GOOG
 ```
 
-Each generated file is daily OHLCV data named like `AAPL_1d.parquet`.
+Each file lands in `data/market` as `AAPL_1d.parquet` and is registered as a dataset with source `stooq` or `yahoo`. You can also add tickers on the Datasets page at [http://localhost:3000/datasets](http://localhost:3000/datasets), or ask the chat assistant to fetch them.
+
+The repository also ships synthetic sample files under `data/sample`, registered with source `synthetic`. They are random walks for smoke-testing only; the UI labels them and prefers real datasets when picking a default.
 
 ## 3. Create A Sample Strategy
 
@@ -44,7 +46,7 @@ The backend validates strategy code before saving. If validation fails, the edit
 
 ## 4. Run A Backtest
 
-1. On the strategy detail page, use the dataset selector to choose a registered sample dataset. The AAPL daily sample is selected by default when available.
+1. On the strategy detail page, use the dataset selector to choose a registered dataset. A real AAPL daily dataset is selected by default when available; synthetic datasets are labeled.
 2. Click `Run Backtest`.
 3. Rewind creates a pending run and navigates to the run detail page.
 4. The worker executes the run against params derived from the selected dataset:
@@ -72,25 +74,23 @@ To compare strategy variants:
 
 The first selected run is the baseline for deltas.
 
-## 6. Ask Chat About Results
+## 6. Let Chat Do The Work
 
-If `OPENAI_API_KEY` is configured:
-
-1. Open a completed run detail page.
-2. Use the chat link or open [http://localhost:3000/chat](http://localhost:3000/chat).
-3. Ask questions such as:
+If `OPENAI_API_KEY` is configured, open [http://localhost:3000/chat](http://localhost:3000/chat). The assistant can operate the app itself, and each tool call appears in the conversation as it runs. Try:
 
 ```text
-Why did this run perform this way?
+Backtest a 20/50 SMA crossover on NVDA over the last five years and tell me how it did.
 ```
 
-For comparisons, open chat from the compare page and ask:
+The assistant writes the strategy, fetches NVDA data if no real dataset exists, runs the backtest, waits for the result, and summarizes the metrics with links to the run.
 
 ```text
-Which run had the better risk-adjusted performance?
+How did my last three runs compare?
 ```
 
-Chat uses backend-resolved run or comparison context. It should reference actual metrics and limitations instead of inventing missing data.
+It lists the runs, compares them, and explains the deltas.
+
+Opening chat from a run or compare page also passes that run or comparison as context, so questions like "Why did this run perform this way?" work without naming ids. The only thing the assistant will not do on its own is delete a strategy; it proposes that as an action you confirm.
 
 ## 7. Write Your Own Strategy
 

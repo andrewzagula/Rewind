@@ -9,8 +9,10 @@ import type {
   ChatAction,
   ChatActionAuditRequest,
   ChatContext,
+  ChatToolActivity,
   CompareRunsActionPayload,
   CreateStrategyAndRunActionPayload,
+  DeleteStrategyActionPayload,
   GeneratedStrategyDraft,
   GeneratedStrategyMetadata,
   ChatMessage,
@@ -167,11 +169,37 @@ function getAssistantActions(message: ChatMessage): ChatAction[] {
       (action.type === "apply_code" ||
         action.type === "run_backtest" ||
         action.type === "compare_runs" ||
-        action.type === "create_strategy_and_run") &&
+        action.type === "create_strategy_and_run" ||
+        action.type === "delete_strategy") &&
       typeof action.label === "string" &&
       isChatActionStatus(action.status)
     );
   });
+}
+
+function isChatToolStatus(value: unknown): value is ChatToolActivity["status"] {
+  return value === "running" || value === "completed" || value === "failed";
+}
+
+function getToolActivity(message: ChatMessage): ChatToolActivity[] {
+  const activity = message.metadata.tool_activity;
+  if (!Array.isArray(activity)) return [];
+
+  return activity.filter((item): item is ChatToolActivity => {
+    if (!isRecord(item)) return false;
+    return (
+      typeof item.id === "string" &&
+      typeof item.name === "string" &&
+      isRecord(item.arguments) &&
+      isChatToolStatus(item.status)
+    );
+  });
+}
+
+function isDeleteStrategyPayload(
+  payload: ChatAction["payload"]
+): payload is DeleteStrategyActionPayload {
+  return isRecord(payload) && typeof payload.strategy_id === "string";
 }
 
 function isApplyCodePayload(payload: ChatAction["payload"]): payload is ApplyCodeActionPayload {
@@ -237,6 +265,11 @@ function actionSummary(action: ChatAction): string {
     return `Create "${action.payload.name}"${className} and run with ${params}`;
   }
 
+  if (action.type === "delete_strategy" && isDeleteStrategyPayload(action.payload)) {
+    const name = action.payload.strategy_name ? ` "${action.payload.strategy_name}"` : "";
+    return `Permanently delete strategy${name} ${action.payload.strategy_id.slice(0, 8)}... This cannot be undone.`;
+  }
+
   return "Action payload is invalid";
 }
 
@@ -264,6 +297,9 @@ function actionResultText(action: ChatAction): string {
   }
   if (typeof action.result.strategy_version === "number") {
     return `Strategy updated to v${action.result.strategy_version}.`;
+  }
+  if (action.result.deleted === true) {
+    return "Strategy deleted.";
   }
   if (Array.isArray(action.result.run_ids)) {
     return `Comparison opened for ${action.result.run_ids.length} runs.`;
@@ -296,6 +332,37 @@ function formatMetric(value: unknown, kind: "decimal" | "integer" | "percent"): 
 
 function actionRunHref(action: ChatAction): string {
   return typeof action.result?.run_id === "string" ? `/runs/${action.result.run_id}` : "";
+}
+
+function toolLabel(name: string): string {
+  const labels: Record<string, string> = {
+    list_strategies: "Listing strategies",
+    get_strategy: "Reading strategy",
+    list_runs: "Listing runs",
+    get_run: "Reading run results",
+    compare_runs: "Comparing runs",
+    list_datasets: "Listing datasets",
+    fetch_market_data: "Fetching market data",
+    create_strategy: "Creating strategy",
+    update_strategy_code: "Updating strategy code",
+    run_backtest: "Running backtest",
+  };
+  return labels[name] ?? name.replace(/_/g, " ");
+}
+
+function toolArgumentsText(activity: ChatToolActivity): string {
+  const entries = Object.entries(activity.arguments).filter(([key]) => key !== "code");
+  if (Object.prototype.hasOwnProperty.call(activity.arguments, "code")) {
+    entries.push(["code", "<python source>"]);
+  }
+  if (entries.length === 0) return "";
+  return entries
+    .map(([key, value]) => {
+      const rendered = typeof value === "string" ? value : JSON.stringify(value);
+      const short = rendered.length > 48 ? `${rendered.slice(0, 45)}...` : rendered;
+      return `${key}=${short}`;
+    })
+    .join(", ");
 }
 
 function wait(ms: number): Promise<void> {
@@ -383,6 +450,7 @@ function ChatPageClient() {
   const [activeContext, setActiveContext] = useState<ChatContext | null>(null);
   const [contextError, setContextError] = useState("");
   const [streamingText, setStreamingText] = useState("");
+  const [streamingTools, setStreamingTools] = useState<ChatToolActivity[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
@@ -466,6 +534,7 @@ function ChatPageClient() {
     setError("");
     setSending(true);
     setStreamingText("");
+    setStreamingTools([]);
     setMessages((current) => [...current, tempMessage(text, selectedSessionId)]);
 
     let activeSessionId = selectedSessionId;
@@ -489,6 +558,16 @@ function ChatPageClient() {
           });
         } else if (streamEvent.type === "chunk") {
           setStreamingText((current) => current + streamEvent.content);
+        } else if (streamEvent.type === "tool_call") {
+          const started = streamEvent.tool;
+          setStreamingTools((current) => [...current.filter((item) => item.id !== started.id), started]);
+        } else if (streamEvent.type === "tool_result") {
+          const finished = streamEvent.tool;
+          setStreamingTools((current) =>
+            current.some((item) => item.id === finished.id)
+              ? current.map((item) => (item.id === finished.id ? finished : item))
+              : [...current, finished]
+          );
         } else if (streamEvent.type === "error") {
           streamError = streamEvent.error || "Assistant failed to respond";
           setError(streamError);
@@ -505,6 +584,7 @@ function ChatPageClient() {
     } finally {
       setSending(false);
       setStreamingText("");
+      setStreamingTools([]);
     }
   }
 
@@ -672,6 +752,28 @@ function ChatPageClient() {
         navigate: false,
         auditStatus: finalRun.status === "failed" ? "failed" : "completed",
         error: finalRun.status === "failed" ? finalRun.error ?? "Backtest failed." : "",
+      };
+    }
+
+    if (action.type === "delete_strategy") {
+      if (!isDeleteStrategyPayload(action.payload)) {
+        throw new Error("Delete-strategy action payload is invalid.");
+      }
+      setActionProgressForKey(key, {
+        status: "running",
+        detail: `Deleting strategy ${action.payload.strategy_id.slice(0, 8)}...`,
+      });
+      await apiFetch<void>(`/api/v1/strategies/${action.payload.strategy_id}`, {
+        method: "DELETE",
+      });
+      return {
+        result: {
+          strategy_id: action.payload.strategy_id,
+          strategy_name: action.payload.strategy_name ?? null,
+          deleted: true,
+        },
+        href: "/strategies",
+        navigate: false,
       };
     }
 
@@ -889,7 +991,9 @@ function ChatPageClient() {
                   actionProgress={actionProgress}
                 />
               ))}
-              {sending ? <StreamingAssistantMessage content={streamingText} /> : null}
+              {sending ? (
+                <StreamingAssistantMessage content={streamingText} tools={streamingTools} />
+              ) : null}
             </div>
           )}
         </section>
@@ -936,6 +1040,7 @@ function MessageBubble({
   const isUser = message.role === "user";
   const generatedStrategy = isUser ? null : getGeneratedStrategyMetadata(message);
   const assistantActions = isUser ? [] : getAssistantActions(message);
+  const toolActivity = isUser ? [] : getToolActivity(message);
   const visibleContent = isUser ? message.content : stripActionBlocks(message.content);
 
   return (
@@ -950,6 +1055,7 @@ function MessageBubble({
         </p>
         <p className="text-xs text-zinc-600">{formatDateTime(message.created_at)}</p>
       </div>
+      {toolActivity.length > 0 ? <ToolActivityList tools={toolActivity} className="mt-3" /> : null}
       {visibleContent ? (
         <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-zinc-100">
           {visibleContent}
@@ -988,19 +1094,75 @@ function MessageBubble({
   );
 }
 
-function StreamingAssistantMessage({ content }: { content: string }) {
+function StreamingAssistantMessage({
+  content,
+  tools,
+}: {
+  content: string;
+  tools: ChatToolActivity[];
+}) {
+  const activeTool = tools.find((tool) => tool.status === "running");
+  const progressLabel = activeTool ? toolLabel(activeTool.name) : "Assistant is responding";
+
   return (
     <div className="rounded border border-blue-900/70 bg-blue-950/20 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-medium uppercase text-blue-300">Assistant</p>
-        <InlineProgress label="Assistant is responding" className="text-xs" />
+        <InlineProgress label={progressLabel} className="text-xs" />
       </div>
+      {tools.length > 0 ? <ToolActivityList tools={tools} className="mt-3" /> : null}
       {content ? (
         <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-zinc-100">{content}</p>
-      ) : (
+      ) : tools.length === 0 ? (
         <p className="mt-2 text-sm text-zinc-500">Waiting for the first response chunk...</p>
-      )}
+      ) : null}
     </div>
+  );
+}
+
+function ToolActivityList({
+  tools,
+  className = "",
+}: {
+  tools: ChatToolActivity[];
+  className?: string;
+}) {
+  return (
+    <ul className={`space-y-1.5 ${className}`}>
+      {tools.map((tool) => {
+        const argumentsText = toolArgumentsText(tool);
+        const statusClass =
+          tool.status === "failed"
+            ? "border-red-800 bg-red-950/30 text-red-300"
+            : tool.status === "completed"
+              ? "border-green-800 bg-green-950/30 text-green-300"
+              : "border-amber-800 bg-amber-950/30 text-amber-300";
+        return (
+          <li
+            key={tool.id}
+            className="flex flex-wrap items-start gap-2 rounded border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+          >
+            <span className={`rounded border px-1.5 py-0.5 font-medium ${statusClass}`}>
+              {tool.status === "running" ? "running" : tool.status}
+            </span>
+            <span className="font-medium text-zinc-200">{toolLabel(tool.name)}</span>
+            {argumentsText ? <span className="text-zinc-500">{argumentsText}</span> : null}
+            {tool.status === "running" ? (
+              <InlineProgress label="" className="text-xs" />
+            ) : tool.summary ? (
+              <span className={`basis-full ${tool.status === "failed" ? "text-red-300" : "text-zinc-400"}`}>
+                {tool.summary}
+              </span>
+            ) : null}
+            {tool.href && tool.status === "completed" ? (
+              <a href={tool.href} className="basis-full font-medium text-blue-300 hover:text-blue-200">
+                Open
+              </a>
+            ) : null}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

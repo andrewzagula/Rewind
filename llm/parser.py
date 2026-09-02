@@ -30,12 +30,19 @@ class ActionParseResult:
 
 CODE_BLOCK_RE = re.compile(r"```([^\n`]*)\n?([\s\S]*?)```")
 ACTION_BLOCK_LANGUAGE = "rewind-action"
-ACTION_TYPES = {"apply_code", "run_backtest", "compare_runs", "create_strategy_and_run"}
+ACTION_TYPES = {
+    "apply_code",
+    "run_backtest",
+    "compare_runs",
+    "create_strategy_and_run",
+    "delete_strategy",
+}
 ACTION_LABELS = {
     "apply_code": "Apply generated code",
     "run_backtest": "Run backtest",
     "compare_runs": "Compare runs",
     "create_strategy_and_run": "Create strategy and run backtest",
+    "delete_strategy": "Delete strategy",
 }
 
 
@@ -185,6 +192,8 @@ def _normalize_action(
             prefix,
             errors,
         )
+    elif action_type == "delete_strategy":
+        normalized_payload = _normalize_delete_strategy_payload(payload, prefix, errors)
 
     if normalized_id is None or normalized_payload is None or errors:
         return None, errors
@@ -336,6 +345,22 @@ def _normalize_create_strategy_and_run_payload(
     }
     if isinstance(class_name, str) and class_name:
         normalized["class_name"] = class_name
+    return normalized
+
+
+def _normalize_delete_strategy_payload(
+    payload: dict[str, Any],
+    prefix: str,
+    errors: list[str],
+) -> dict[str, Any] | None:
+    strategy_id = _parse_uuid(payload.get("strategy_id"), f"{prefix} payload.strategy_id", errors)
+    if strategy_id is None:
+        return None
+
+    normalized: dict[str, Any] = {"strategy_id": strategy_id}
+    raw_name = payload.get("strategy_name")
+    if isinstance(raw_name, str) and raw_name.strip():
+        normalized["strategy_name"] = raw_name.strip()
     return normalized
 
 

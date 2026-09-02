@@ -348,3 +348,37 @@ def test_parse_assistant_actions_rejects_create_strategy_and_run_invalid_code():
         "Action block 1, action 1 payload.code Broken must define init().",
         "Action block 1, action 1 payload.code Broken must define next().",
     ]
+
+
+def test_parse_delete_strategy_action() -> None:
+    strategy_id = "0d4f0a8e-2f5f-4f4d-9a7d-8d9a3e0c1b2a"
+    text = (
+        "I can remove it if you confirm.\n"
+        "```rewind-action\n"
+        '{"actions": [{"type": "delete_strategy", '
+        f'"payload": {{"strategy_id": "{strategy_id}", "strategy_name": " Old SMA "}}}}]}}\n'
+        "```"
+    )
+
+    result = parse_assistant_actions(text)
+
+    assert result.errors == []
+    assert len(result.actions) == 1
+    action = result.actions[0]
+    assert action["type"] == "delete_strategy"
+    assert action["label"] == "Delete strategy"
+    assert action["status"] == "proposed"
+    assert action["payload"] == {"strategy_id": strategy_id, "strategy_name": "Old SMA"}
+
+
+def test_parse_delete_strategy_action_requires_uuid() -> None:
+    text = (
+        "```rewind-action\n"
+        '{"actions": [{"type": "delete_strategy", "payload": {"strategy_id": "nope"}}]}\n'
+        "```"
+    )
+
+    result = parse_assistant_actions(text)
+
+    assert result.actions == []
+    assert any("payload.strategy_id must be a valid UUID" in error for error in result.errors)

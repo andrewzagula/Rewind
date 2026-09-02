@@ -11,6 +11,7 @@ services:
       - ./engine:/app/engine
       - ./llm:/app/llm
       - ./data:/app/data
+      - ./scripts:/app/scripts
     depends_on:
       postgres:
         condition: service_healthy
@@ -28,6 +29,7 @@ services:
       - ./engine:/app/engine
       - ./llm:/app/llm
       - ./data:/app/data
+      - ./scripts:/app/scripts
     depends_on:
       postgres:
         condition: service_healthy

@@ -109,7 +109,8 @@ export type ChatActionType =
   | "apply_code"
   | "run_backtest"
   | "compare_runs"
-  | "create_strategy_and_run";
+  | "create_strategy_and_run"
+  | "delete_strategy";
 export type ChatActionStatus = "proposed" | "completed" | "failed" | "cancelled";
 export type ChatActionAuditStatus = Exclude<ChatActionStatus, "proposed">;
 
@@ -136,11 +137,17 @@ export interface CreateStrategyAndRunActionPayload {
   params: Record<string, unknown>;
 }
 
+export interface DeleteStrategyActionPayload {
+  strategy_id: string;
+  strategy_name?: string | null;
+}
+
 export type ChatActionPayload =
   | ApplyCodeActionPayload
   | RunBacktestActionPayload
   | CompareRunsActionPayload
-  | CreateStrategyAndRunActionPayload;
+  | CreateStrategyAndRunActionPayload
+  | DeleteStrategyActionPayload;
 
 export interface ChatAction {
   id: string;
@@ -160,10 +167,24 @@ export interface ChatActionAuditRequest {
   error?: string;
 }
 
+export type ChatToolStatus = "running" | "completed" | "failed";
+
+export interface ChatToolActivity {
+  id: string;
+  name: string;
+  arguments: Record<string, unknown>;
+  status: ChatToolStatus;
+  summary: string;
+  href: string;
+  started_at?: string;
+  completed_at?: string;
+}
+
 export type ChatMessageMetadata = Record<string, unknown> & {
   generated_strategy?: GeneratedStrategyMetadata;
   assistant_actions?: ChatAction[];
   assistant_action_errors?: string[];
+  tool_activity?: ChatToolActivity[];
 };
 
 export interface ChatMessage {
@@ -197,10 +218,12 @@ export interface ChatRequest {
 }
 
 export type ChatStreamEvent =
-  | { type: "session"; session: ChatSessionSummary; message?: null; content: ""; error: "" }
-  | { type: "chunk"; session?: null; message?: null; content: string; error: "" }
-  | { type: "done"; session?: null; message: ChatMessage; content: ""; error: "" }
-  | { type: "error"; session?: null; message?: null; content: ""; error: string };
+  | { type: "session"; session: ChatSessionSummary; message?: null; tool?: null; content: ""; error: "" }
+  | { type: "chunk"; session?: null; message?: null; tool?: null; content: string; error: "" }
+  | { type: "tool_call"; session?: null; message?: null; tool: ChatToolActivity; content: ""; error: "" }
+  | { type: "tool_result"; session?: null; message?: null; tool: ChatToolActivity; content: ""; error: "" }
+  | { type: "done"; session?: null; message: ChatMessage; tool?: null; content: ""; error: "" }
+  | { type: "error"; session?: null; message?: null; tool?: null; content: ""; error: string };
 
 export interface ChatSessionListResponse {
   items: ChatSessionSummary[];
@@ -217,5 +240,12 @@ export interface Dataset {
   row_count: number;
   file_path: string;
   checksum: string;
+  source: string;
   created_at: string;
+}
+
+export interface DatasetFetchRequest {
+  symbol: string;
+  start_date?: string;
+  end_date?: string;
 }
